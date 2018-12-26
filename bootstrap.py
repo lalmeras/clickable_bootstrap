@@ -189,6 +189,7 @@ def bootstrap(prefix, name, environment, reset_conda=False, reset_env=False, deb
     # Activate Miniconda env
     # python2.6: index is mandatory
     print("[INFO] Env {0} initialized.".format(prefix), file=sys.stderr)
+    print("[INFO] Run this command to initialize your env:\nsource {0} && conda activate {1}".format(os.path.join(prefix, 'bin', 'activate'), name), file=sys.stderr)
     # TODO: env activation (?)
   except Exception as e:
     # python2.6: index is mandatory
