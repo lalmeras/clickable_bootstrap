@@ -13,7 +13,6 @@ import argparse
 import os
 import os.path
 import pipes
-import shlex
 import shutil
 import subprocess
 import sys
@@ -123,9 +122,6 @@ def bootstrap(prefix, name, environment, reset_conda=False, reset_env=False, deb
       # Run Miniconda
       miniconda_args = ['/bin/bash', miniconda_script, '-u', '-b', '-p', prefix]
       run(miniconda_args, debug=debug)
-    # Upgrade pip
-    pip_upgrade_args = [os.path.join(prefix, 'bin', 'pip'), 'install', '--upgrade', 'pip']
-    run(pip_upgrade_args, debug=debug)
 
     env_exists = False
     try:
@@ -172,7 +168,7 @@ def bootstrap(prefix, name, environment, reset_conda=False, reset_env=False, deb
       except subprocess.CalledProcessError as e:
         # python2.6: index is mandatory
         raise Exception("[FATAL] Error installing {0}: {1}".format(name, e.output))
- 
+
     command = os.getenv('BOOTSTRAP_COMMAND', None)
     if command is not None:
       # python2.6: index is mandatory
