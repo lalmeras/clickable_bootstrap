@@ -118,7 +118,7 @@ def _skip_miniconda(prefix):
     """Return true if miniconda env located in 'prefix' already exists."""
     if os.path.exists(prefix):
         # python2.6: index is mandatory
-        print(("[INFO] {0} already exists; use --reset-conda to destroy" +
+        print(("[INFO] {0} already exists; use --reset-conda to destroy " +
                "and recreate it.").format(prefix),
               file=sys.stderr)
         return True
