@@ -13,6 +13,7 @@ import argparse
 import os
 import os.path
 import pipes
+import re
 import shutil
 import subprocess
 import sys
@@ -214,7 +215,7 @@ def _handle_bootstrap_command(prefix, name):
               file=sys.stderr)
         try:
             activate_conda = ['.', os.path.join(prefix, 'bin/activate')]
-            activate_env = ['conda', 'activate', name]
+            activate_env = ['conda', 'activate', pipes.quote(name)]
             whole_command = ' '.join(activate_conda +
                                      ['&&'] + activate_env +
                                      ['&&'] + [command])
@@ -259,6 +260,7 @@ def _bootstrap(prefix, name, environment,
     """Delete existing Miniconda if reset_conda=True.
     Print verbose output (stderr of commands and debug messages) if debug=True.
     """
+    name = _fix_bootstrap_name(name, warn=True)
     # handle ~/ paths
     prefix = os.path.expanduser(prefix)
     environment = os.path.expanduser(environment)
@@ -322,7 +324,17 @@ def _default_bootstrap_name(bootstrap_path):
     if not name or name == 'bootstrap':
         return 'default'
     else:
-        return name
+        return _fix_bootstrap_name(name, warn=False)
+
+
+def _fix_bootstrap_name(bootstrap_name, warn=False):
+    bootstrap_name_sub = re.sub(r"[^0-9a-zA-Z-]", "_", bootstrap_name)
+    if bootstrap_name != bootstrap_name_sub:
+        if warn:
+            print("[WARN] Environment renamed {0} from {1} to remove special"
+                  " characters".format(bootstrap_name_sub, bootstrap_name))
+        bootstrap_name = bootstrap_name_sub
+    return bootstrap_name
 
 
 def _parser():
