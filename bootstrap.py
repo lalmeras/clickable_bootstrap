@@ -15,6 +15,7 @@ import os.path
 import pipes
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -241,22 +242,40 @@ def _miniconda_install(prefix, debug=False, removals=None):
     run(miniconda_args, debug=debug)
 
 
-def _print_activate_command(prefix, name):
+def _print_activate_command(prefix, name, bin_dir, skip_activate_script):
+    source_script = (
+                        "{{ source {0} && conda activate {1}; }}"
+                    ).format(
+                        pipes.quote(os.path.join(prefix, 'bin', 'activate')),
+                        pipes.quote(name)
+                    )
+    activate_script_fails = False
+    if not skip_activate_script:
+        try:
+            os.makedirs(bin_dir)
+            activate_script = os.path.join(bin_dir, 'activate-{0}'.format(name))
+            with open(activate_script, 'w') as f:
+                f.write("""#! /bin/bash
+{0}
+""".format(source_script).encode('utf-8'))
+            os.chmod(activate_script, stat.S_IWUSR)
+        except Exception as e:
+            print("[ERROR] activate script creation fails: {0}".format(e.message))
     # python2.6: index is mandatory
     print("[INFO] Env {0} initialized.".format(prefix), file=sys.stderr)
     # print conda activation command-line with before and after newlines
-    print(("[INFO] Run this command to initialize your env:\n\n" +
-           "{{ source {0} && conda activate {1}; }}" +
-           "\n")
-          .format(
-              pipes.quote(os.path.join(prefix, 'bin', 'activate')),
-              pipes.quote(name)
-          ),
-          file=sys.stderr)
+    if skip_activate_script or activate_script_fails:
+        print(("[INFO] Run this command to initialize your env:\n\n" +
+             "{0}" +
+             "\n")
+            .format(source_script),
+            file=sys.stderr)
 
 
 def _bootstrap(prefix, name, environment,
-               reset_conda=False, reset_env=False, debug=False):
+               reset_conda=False, reset_env=False,
+               bin_dir='', skip_activate_script=False,
+               debug=False):
     """Delete existing Miniconda if reset_conda=True.
     Print verbose output (stderr of commands and debug messages) if debug=True.
     """
@@ -289,7 +308,7 @@ def _bootstrap(prefix, name, environment,
         _handle_bootstrap_command(prefix, name)
 
         # Activate Miniconda env
-        _print_activate_command(prefix, name)
+        _print_activate_command(prefix, name, bin_dir, skip_activate_script)
     except Exception as e:
         # python2.6: index is mandatory
         print('[ERROR] Bootstrap failure: {0}'.format(str(e)), file=sys.stderr)
@@ -342,6 +361,7 @@ def _parser():
     # path for environment/pyproject.toml and determining bootstrap_name
     # is not provided
     default_bootstrap_path = os.getenv('BOOTSTRAP_PATH', os.getcwd())
+    default_bin_dir = os.getenv('BOOTSTRAP_BIN_DIR', os.path.expanduser('~/.bin'))
     # default bootstrap_name
     default_bootstrap_name = os.getenv(
         'BOOTSTRAP_NAME',
@@ -373,6 +393,12 @@ def _parser():
     cmd.add_argument('--prefix',
                      dest='prefix', default=default_conda_prefix,
                      help='Prefix for conda environment.')
+    cmd.add_argument('--bin-dir',
+                     dest='bin_dir', default=default_bin_dir,
+                     help='Default path for activate-* scripts')
+    cmd.add_argument('--skip-activate-script', dest='skip_activate_script',
+                     action='store_true', default=False,
+                     help='Do not create activate-[NAME] script')
     return cmd
 
 
