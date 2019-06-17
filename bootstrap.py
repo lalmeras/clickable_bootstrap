@@ -242,39 +242,100 @@ def _miniconda_install(prefix, debug=False, removals=None):
     run(miniconda_args, debug=debug)
 
 
-def _print_activate_command(prefix, name, bin_dir, skip_activate_script):
-    source_script = (
-                        "{{ source {0} && conda activate {1}; }}"
-                    ).format(
-                        pipes.quote(os.path.join(prefix, 'bin', 'activate')),
-                        pipes.quote(name)
-                    )
+BOOTSTRAP_ACTIVATE_SCRIPT = """
+bootstrap-reload () {{
+    if compgen -G "{0}/*.conf" > /dev/null; then
+        for item in "{0}/"*.conf; do
+          source "$item"
+        done
+    fi
+}}
+
+bootstrap-activate () {{
+    bootstrap-reload
+    'activate-'"$1"
+}}
+
+bootstrap-reload
+
+export BOOTSTRAP_ACTIVATE=1
+"""
+
+ACTIVATE_SCRIPT = """
+activate-{1} () {{
+    source {0} && conda activate {1}
+}}
+"""
+ACTIVATE_CONDA_COMMAND = "source {0} && conda activate {1}"
+ACTIVATE_BOOTSTRAP_COMMAND = "source {0} && bootstrap-activate {1}"
+
+
+def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_script):
+    # -> .profile.d/boostrap.conf.d/
+    bootstrap_conf_d_path = os.path.expanduser('{0}.d'.format(bootstrap_conf_path))
+    # -> .profile.d/boostrap.conf.d/activate-[NAME].conf
+    activate_path = os.path.join(bootstrap_conf_d_path, 'activate-{0}.conf'.format(name))
+    activate_script = ACTIVATE_SCRIPT.format(
+        pipes.quote(os.path.join(prefix, 'bin', 'activate')),
+        pipes.quote(name)
+    )
+    bootstrap_script = BOOTSTRAP_ACTIVATE_SCRIPT.format(
+        bootstrap_conf_d_path
+    )
     activate_script_fails = False
     if not skip_activate_script:
         try:
-            os.makedirs(bin_dir)
-            activate_script = os.path.join(bin_dir, 'activate-{0}'.format(name))
-            with open(activate_script, 'w') as f:
-                f.write("""#! /bin/bash
-{0}
-""".format(source_script).encode('utf-8'))
-            os.chmod(activate_script, stat.S_IWUSR)
+            # profile_dir may include not resolved '~'
+            real_bootstrap_conf_path = os.path.expanduser(bootstrap_conf_path)
+            if not os.path.exists(bootstrap_conf_d_path):
+                os.makedirs(bootstrap_conf_d_path)
+            with open(real_bootstrap_conf_path, 'w') as f:
+                f.write(bootstrap_script.encode('utf-8'))
+            with open(activate_path, 'w') as f:
+                f.write(activate_script.encode('utf-8'))
         except Exception as e:
-            print("[ERROR] activate script creation fails: {0}".format(e.message))
+            print("[ERROR] activate script creation fails: {0}".format(e))
     # python2.6: index is mandatory
     print("[INFO] Env {0} initialized.".format(prefix), file=sys.stderr)
-    # print conda activation command-line with before and after newlines
+    bootstrap_activate_enabled = False
+    bootstrap_activate_loadable = False
     if skip_activate_script or activate_script_fails:
-        print(("[INFO] Run this command to initialize your env:\n\n" +
-             "{0}" +
-             "\n")
-            .format(source_script),
-            file=sys.stderr)
+        pass
+    else:
+        # detect bootstrap-activate
+        if os.getenv('BOOTSTRAP_ACTIVATE', None) == '1':
+            bootstrap_activate_enabled = True
+        else:
+            try:
+                check_command = ['/bin/bash', '-l', '-c', 'echo -n $BOOTSTRAP_ACTIVATE']
+                bootstrap_activate_loadable = (
+                    subprocess.check_output(check_command) == '1')
+            except Exception as e:
+                print('[WARN ] Error checking if bootstrap.conf is sourced. '
+                      'Assuming it is not sourced.',
+                      file=sys.stderr)
+    command = None
+    if bootstrap_activate_enabled:
+        command = 'bootstrap-activate {0}'.format(pipes.quote(name))
+    elif bootstrap_activate_loadable:
+        command = ACTIVATE_BOOTSTRAP_COMMAND.format(
+            pipes.quote(real_bootstrap_conf_path), pipes.quote(name))
+    else:
+        command = ACTIVATE_CONDA_COMMAND.format(
+            pipes.quote(os.path.join(prefix, 'bin', 'activate')),
+            pipes.quote(name)
+        )
+    # print activation command-line
+    print(("[INFO] Run this command to initialize your env:\n\n" +
+         "{0}" +
+         "\n")
+        .format(command),
+        file=sys.stderr)
 
 
-def _bootstrap(prefix, name, environment,
+def _bootstrap(prefix, name, environment, args,
                reset_conda=False, reset_env=False,
-               bin_dir='', skip_activate_script=False,
+               profile_dir='', skip_activate_script=False,
                debug=False):
     """Delete existing Miniconda if reset_conda=True.
     Print verbose output (stderr of commands and debug messages) if debug=True.
@@ -307,8 +368,18 @@ def _bootstrap(prefix, name, environment,
         _handle_env(prefix, name, environment, reset_env)
         _handle_bootstrap_command(prefix, name)
 
-        # Activate Miniconda env
-        _print_activate_command(prefix, name, bin_dir, skip_activate_script)
+        if not args:
+            # Print commands to activate Miniconda env
+            _print_activate_command(prefix, name, profile_dir, skip_activate_script)
+        else:
+            # Launch command
+            if args[0] == '--':
+                args = args[1:]
+            subprocess.check_call(_command(
+                os.path.join(prefix, 'envs', name), # env path
+                args[0],                            # command
+                *args[1:]                           # args
+            ))
     except Exception as e:
         # python2.6: index is mandatory
         print('[ERROR] Bootstrap failure: {0}'.format(str(e)), file=sys.stderr)
@@ -361,7 +432,7 @@ def _parser():
     # path for environment/pyproject.toml and determining bootstrap_name
     # is not provided
     default_bootstrap_path = os.getenv('BOOTSTRAP_PATH', os.getcwd())
-    default_bin_dir = os.getenv('BOOTSTRAP_BIN_DIR', os.path.expanduser('~/.bin'))
+    default_profile_dir = os.getenv('BOOTSTRAP_BIN_DIR', '~/.profile.d/bootstrap.conf')
     # default bootstrap_name
     default_bootstrap_name = os.getenv(
         'BOOTSTRAP_NAME',
@@ -393,12 +464,13 @@ def _parser():
     cmd.add_argument('--prefix',
                      dest='prefix', default=default_conda_prefix,
                      help='Prefix for conda environment.')
-    cmd.add_argument('--bin-dir',
-                     dest='bin_dir', default=default_bin_dir,
-                     help='Default path for activate-* scripts')
+    cmd.add_argument('--profile-dir',
+                     dest='profile_dir', default=default_profile_dir,
+                     help='Default path for bootstrap.conf and activate-* scripts')
     cmd.add_argument('--skip-activate-script', dest='skip_activate_script',
                      action='store_true', default=False,
                      help='Do not create activate-[NAME] script')
+    cmd.add_argument('args', nargs=argparse.REMAINDER, help='Command launched in environment (ex: powo-roles install --help).')
     return cmd
 
 
