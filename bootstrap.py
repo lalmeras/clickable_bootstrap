@@ -49,7 +49,7 @@ def run(args, debug=False, env=None):
 def _download(url, debug=False):
     """Download a file and return tuple of (fd, abspath).
     Caller is responsible for deleting file.
-    Exception if download cannot be done.
+    Exception if download cannot be performed.
     """
     # Miniconda script raise an error if script is not called something.sh
     (handle, abspath) = tempfile.mkstemp(prefix='bootstrap', suffix='.sh')
@@ -73,10 +73,10 @@ def _download(url, debug=False):
     return (handle, abspath)
 
 
-def _command(prefix, command, *args):
-    """Build command path (prefix + /bin/ + command) and return a command
+def _command(conda_prefix, command, *args):
+    """Build command path (conda_prefix + /bin/ + command) and return a command
     list [command, *args] that can be used by subprocess API."""
-    result = [os.path.join(prefix, 'bin', command)]
+    result = [os.path.join(conda_prefix, 'bin', command)]
     result.extend(args)
     return result
 
@@ -243,6 +243,7 @@ def _miniconda_install(prefix, debug=False, removals=None):
 
 
 BOOTSTRAP_ACTIVATE_SCRIPT = """
+# Reload all environment files
 bootstrap-reload () {{
     if compgen -G "{0}/*.conf" > /dev/null; then
         for item in "{0}/"*.conf; do
@@ -251,19 +252,45 @@ bootstrap-reload () {{
     fi
 }}
 
+# Function that performs a reload before
+# loading environment given as first and unique
+# parameter
 bootstrap-activate () {{
     bootstrap-reload
     'activate-'"$1"
 }}
+bootstrap-deactivate () {{
+    if [ -z "$BOOTSTRAP_ENV" ]; then
+        echo "No env set; deactivate failed"
+        return 1
+    fi
+    deactivate-"$BOOTSTRAP_ENV"
+}}
 
+# Preload all environments
 bootstrap-reload
 
+# Flag bootstrap functions as loaded
 export BOOTSTRAP_ACTIVATE=1
 """
 
 ACTIVATE_SCRIPT = """
 activate-{1} () {{
+    if [ -n "$BOOTSTRAP_ENV" ]; then
+        if [ "$BOOTSTRAP_ENV" == {1} ]; then
+            echo "$BOOTSTRAP_ENV already loaded"
+            return 1
+        else
+            echo "Another env $BOOTSTRAP_ENV is loaded; cannot load "{1}
+            return 1
+        fi
+    fi
     source {0} && conda activate {1}
+    BOOTSTRAP_ENV="{1}"
+}}
+deactivate-{1} () {{
+    conda deactivate
+    unset BOOTSTRAP_ENV
 }}
 """
 ACTIVATE_CONDA_COMMAND = "source {0} && conda activate {1}"
