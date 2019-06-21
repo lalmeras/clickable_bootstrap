@@ -395,12 +395,12 @@ def _bootstrap(prefix, name, environment, args,
         _handle_env(prefix, name, environment, reset_env)
         _handle_bootstrap_command(prefix, name)
 
-        if not args:
-            # Print commands to activate Miniconda env
-            _print_activate_command(prefix, name, profile_dir, skip_activate_script)
-        else:
+        # Print commands to activate Miniconda env
+        _print_activate_command(prefix, name, profile_dir, skip_activate_script)
+        if args:
+            print('[INFO] Use remaining args as command: %s'.format(' '.join(args)))
             # Launch command
-            if args[0] == '--':
+            while args[0] == '--':
                 args = args[1:]
             subprocess.check_call(_command(
                 os.path.join(prefix, 'envs', name), # env path
