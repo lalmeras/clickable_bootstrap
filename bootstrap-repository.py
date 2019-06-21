@@ -25,7 +25,13 @@ boostrap-repository.py checkout and install a clickable repository.
 """
 
 
-def _bootstrap(git_command, git_url, repository_path, ref, args, reset=False):
+def _bootstrap(git_command, git_url, repository_path, ref, args,
+               reset_git=False, reset_env=False, reset_conda=False):
+    """Checkout `git_url` with provided `git_command`. Working copy *parent* path
+    is `repository_path` . Folder name is built from `git_url`.
+
+    If reset_git is true, target path is
+    """
     repository_path = os.path.expanduser(repository_path)
     target_path = os.path.join(repository_path,
         os.path.splitext(os.path.basename(git_url))[0])
@@ -42,7 +48,7 @@ def _bootstrap(git_command, git_url, repository_path, ref, args, reset=False):
         if not os.path.exists(repository_path):
             print('[INFO] Creating {0}.'.format(repository_path), file=sys.stderr)
             os.makedirs(repository_path)
-        if reset and os.path.exists(target_path) and target_path:
+        if reset_git and os.path.exists(target_path) and target_path:
             print('[WARN ] Deleting existing clone: {0}.'.format(target_path))
             shutil.rmtree(target_path)
         if not os.path.exists(target_path):
@@ -56,6 +62,10 @@ def _bootstrap(git_command, git_url, repository_path, ref, args, reset=False):
         print('[INFO] Running bootstrap phase', file=sys.stderr)
         bootstrap_path = os.path.join(target_path, './bootstrap/bootstrap.sh')
         bootstrap_arguments = []
+        if reset_env:
+            boostrap_arguments.append('--reset-env')
+        if reset_conda:
+            boostrap_arguments.append('--reset-conda')
         bootstrap_arguments.append('--')
         bootstrap_arguments.extend(args)
         subprocess.check_call(_command(bootstrap_path, *bootstrap_arguments), cwd=target_path)
@@ -97,9 +107,15 @@ def _parser():
     cmd.add_argument('--ref',
                      dest='ref', default=default_ref,
                      help='Git reference to checkout.')
-    cmd.add_argument('--reset',
-                     dest='reset', action='store_true', default=False,
+    cmd.add_argument('--reset-git',
+                     dest='reset_git', action='store_true', default=False,
                      help='Remove existing repository before cloning.')
+    cmd.add_argument('--reset-env',
+                     dest='reset', action='store_true', default=False,
+                     help='Remove target environment.')
+    cmd.add_argument('--reset-conda',
+                     dest='reset', action='store_true', default=False,
+                     help='Remove conda installation.')
     cmd.add_argument('--git-command',
                      dest='git_command', default=default_git_command,
                      help='Path for git command.')
