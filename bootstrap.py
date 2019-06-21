@@ -27,7 +27,7 @@ MINICONDA_INSTALLER_URL = \
   'https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh'
 
 
-def run(args, debug=False, env=None):
+def _run(args, debug=False, env=None):
     """Run a command, with stdout and stderr connected to the current terminal.
     Log command if debug=True.
     """
@@ -239,7 +239,7 @@ def _miniconda_install(prefix, debug=False, removals=None):
     # Run Miniconda
     miniconda_args = ['/bin/bash', miniconda_script,
                       '-u', '-b', '-p', prefix]
-    run(miniconda_args, debug=debug)
+    _run(miniconda_args, debug=debug)
 
 
 BOOTSTRAP_ACTIVATE_SCRIPT = """
@@ -497,7 +497,8 @@ def _parser():
     cmd.add_argument('--skip-activate-script', dest='skip_activate_script',
                      action='store_true', default=False,
                      help='Do not create activate-[NAME] script')
-    cmd.add_argument('args', nargs=argparse.REMAINDER, help='Command launched in environment (ex: powo-roles install --help).')
+    cmd.add_argument('args', nargs=argparse.REMAINDER,
+                     help='Command launched in environment (ex: powo-roles install --help).')
     return cmd
 
 
