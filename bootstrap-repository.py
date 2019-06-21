@@ -51,9 +51,14 @@ def _bootstrap(git_command, git_url, repository_path, ref, args, reset=False):
         print('[INFO] Switching/refreshing reference {0}.'.format(ref), file=sys.stderr)
         subprocess.check_call(_command(git_command, 'checkout', ref), cwd=target_path)
         subprocess.check_call(_command(git_command, 'pull'), cwd=target_path)
+        subprocess.check_call(_command(git_command, 'submodule', 'update', '--init'),
+                              cwd=target_path)
         print('[INFO] Running bootstrap phase', file=sys.stderr)
         bootstrap_path = os.path.join(target_path, './bootstrap/bootstrap.sh')
-        subprocess.check_call(_command(bootstrap_path, *args), cwd=target_path)
+        bootstrap_arguments = []
+        bootstrap_arguments.append('--')
+        bootstrap_arguments.extend(args)
+        subprocess.check_call(_command(bootstrap_path, *bootstrap_arguments), cwd=target_path)
     except subprocess.CalledProcessError as e:
         # python2.6: index is mandatory
         raise Exception("[FATAL] Error running {0}: {1}"
