@@ -83,7 +83,7 @@ def _command(conda_prefix, command, *args):
 
 def _prepare_conda(prefix, reset_conda):
     """Prepare 'prefix' parent directories. Remove any existing installation
-    if reset_env=True.
+    if reset_conda=True.
     """
     prefix_parent = os.path.dirname(prefix)
     if not os.path.exists(prefix_parent):
@@ -398,7 +398,7 @@ def _bootstrap(prefix, name, environment, args,
         # Print commands to activate Miniconda env
         _print_activate_command(prefix, name, profile_dir, skip_activate_script)
         if args:
-            print('[INFO] Use remaining args as command: %s'.format(' '.join(args)))
+            print('[INFO] Use remaining args as command: {0}'.format(' '.join(args)))
             # Launch command
             while args[0] == '--':
                 args = args[1:]

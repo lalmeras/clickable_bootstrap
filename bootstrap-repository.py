@@ -63,9 +63,9 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
         bootstrap_path = os.path.join(target_path, './bootstrap/bootstrap.sh')
         bootstrap_arguments = []
         if reset_env:
-            boostrap_arguments.append('--reset-env')
+            bootstrap_arguments.append('--reset-env')
         if reset_conda:
-            boostrap_arguments.append('--reset-conda')
+            bootstrap_arguments.append('--reset-conda')
         bootstrap_arguments.append('--')
         bootstrap_arguments.extend(args)
         subprocess.check_call(_command(bootstrap_path, *bootstrap_arguments), cwd=target_path)
