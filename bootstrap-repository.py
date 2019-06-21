@@ -111,10 +111,10 @@ def _parser():
                      dest='reset_git', action='store_true', default=False,
                      help='Remove existing repository before cloning.')
     cmd.add_argument('--reset-env',
-                     dest='reset', action='store_true', default=False,
+                     dest='reset_env', action='store_true', default=False,
                      help='Remove target environment.')
     cmd.add_argument('--reset-conda',
-                     dest='reset', action='store_true', default=False,
+                     dest='reset_conda', action='store_true', default=False,
                      help='Remove conda installation.')
     cmd.add_argument('--git-command',
                      dest='git_command', default=default_git_command,
