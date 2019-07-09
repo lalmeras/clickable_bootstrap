@@ -57,7 +57,7 @@ def _download(url, debug=False):
     try:
         args = ['curl', '-v' if debug else None, '-o', abspath, url]
         args = [i for i in args if i]
-        run(args, debug=debug)
+        _run(args, debug=debug)
     except Exception as e:
         if not debug:
             try:
