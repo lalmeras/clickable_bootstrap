@@ -402,11 +402,18 @@ def _bootstrap(prefix, name, environment, args,
             # Launch command
             while args[0] == '--':
                 args = args[1:]
+            # update PATH as we need to launch commands
+            env = dict(os.environ)
+            env.update({'PATH': '{}:{}'.format(
+                os.path.join(prefix, 'envs', name, 'bin'),
+                env['PATH']
+            )})
+            print(env)
             subprocess.check_call(_command(
                 os.path.join(prefix, 'envs', name), # env path
                 args[0],                            # command
                 *args[1:]                           # args
-            ))
+            ), env=env)
     except Exception as e:
         # python2.6: index is mandatory
         print('[ERROR] Bootstrap failure: {0}'.format(str(e)), file=sys.stderr)
