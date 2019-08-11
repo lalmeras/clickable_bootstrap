@@ -233,7 +233,9 @@ def _miniconda_install(prefix, debug=False, removals=None):
     in removals if list is initialized"""
     # Conda's python needs libcrypt.so.1 that needs libxcrypt.so.1
     script = """
-[ ! -f /usr/lib64/libcrypt.so.1 -a -f /bin/dnf ] && sudo dnf install -y libxcrypt-compat
+if [ -x /bin/dnf ]; then
+    [ -f /usr/lib64/libcrypt.so.1 ] || sudo dnf install -y libxcrypt-compat
+fi
 """
     subprocess.check_call(script, shell=True)
     # Download Miniconda
