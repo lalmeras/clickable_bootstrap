@@ -408,6 +408,10 @@ def _bootstrap(prefix, name, environment, args,
                 os.path.join(prefix, 'envs', name, 'bin'),
                 env['PATH']
             )})
+            env.update({
+                'PKG_CONFIG_PATH':
+                  os.path.join(prefix, 'envs', name, 'lib', 'pkgconfig')
+            })
             print(env)
             subprocess.check_call(_command(
                 os.path.join(prefix, 'envs', name), # env path
