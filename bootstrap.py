@@ -10,6 +10,7 @@ from __future__ import print_function, unicode_literals
 #
 
 import argparse
+import io
 import os
 import os.path
 import pipes
@@ -323,10 +324,10 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
             real_bootstrap_conf_path = os.path.expanduser(bootstrap_conf_path)
             if not os.path.exists(bootstrap_conf_d_path):
                 os.makedirs(bootstrap_conf_d_path)
-            with open(real_bootstrap_conf_path, 'w') as f:
-                f.write(bootstrap_script.encode('utf-8'))
-            with open(activate_path, 'w') as f:
-                f.write(activate_script.encode('utf-8'))
+            with io.open(real_bootstrap_conf_path, 'w', encoding='utf-8') as f:
+                f.write(bootstrap_script)
+            with io.open(activate_path, 'w', encoding='utf-8') as f:
+                f.write(activate_script)
         except Exception as e:
             print("[ERROR] activate script creation fails: {0}".format(e))
     # python2.6: index is mandatory
