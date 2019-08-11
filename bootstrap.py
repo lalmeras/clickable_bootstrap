@@ -231,6 +231,11 @@ def _handle_bootstrap_command(prefix, name):
 def _miniconda_install(prefix, debug=False, removals=None):
     """Download and install miniconda in prefix, append downloaded file
     in removals if list is initialized"""
+    # Conda's python needs libcrypt.so.1 that needs libxcrypt.so.1
+    script = """
+[ ! -f /usr/lib64/libcrypt.so.1 -a -f /bin/dnf ] && sudo dnf install -y libxcrypt-compat
+"""
+    subprocess.check_call(script, shell=True)
     # Download Miniconda
     (_, miniconda_script) = _download(MINICONDA_INSTALLER_URL,
                                       debug=debug)
