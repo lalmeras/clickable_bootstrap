@@ -1,6 +1,6 @@
 language: python
 python:
   - "3.7"
+install: ./dev-setup.sh
 script:
-  - ./dev-setup.sh
   - .conda/main/bin/tox
