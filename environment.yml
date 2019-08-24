@@ -1,0 +1,13 @@
+---
+
+name: clickable_bootstrap_dev
+channels:
+  - defaults
+dependencies:
+  - python=3.7
+  - pip
+  # must be installed with conda and not with pip
+  # (else py27 and py34 venv cannot be initialized)
+  - virtualenv
+  - pip:
+    - tox

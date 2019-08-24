@@ -1,0 +1,6 @@
+.conda/
+.tox/
+__pycache__/
+
+*.pyc
+*.swp
