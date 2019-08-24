@@ -6,14 +6,18 @@ set -e
 conda_prefix=.conda
 
 # default values for MINICONDA_LOCATION and CONDA_ENV
-: ${MINICONDA_LOCATION:=~/.miniconda2}
+: ${MINICONDA_LOCATION:=~/.miniconda}
+: ${MINICONDA_URL:=https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh}
 : ${CONDA_ENV:=main}
 
 echo "Detect conda"
 # load conda activation script if not loaded
 if ! [ type conda &> /dev/null || which conda &> /dev/null ]; then
     if ! [ -f "${MINICONDA_LOCATION}/bin/activate" ]; then
-        echo "No conda installation detected; abort"
+        echo "Conda not detected, installing in ${MINICONDA_LOCATION}"
+        curl -O "${MINICONDA_URL}"
+        bash "$( basename "${MINICONDA_URL}" )" -u -b -p "${MINICONDA_LOCATION}"
+        rm "$( basename "${MINICONDA_URL}" )"
     fi
     echo "Load conda from ${MINICONDA_LOCATION}"
     source "${MINICONDA_LOCATION}/bin/activate"
