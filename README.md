@@ -11,7 +11,8 @@ Tests use conda to provide python runtimes, and tox for management.
 To install conda command :
 
 ``` bash
-curl -slJ https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh | bash -s -p ~/.miniconda2
+curl -O https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -u -b -p ~/.miniconda2
 ```
 
 To install and prepare python runtimes
