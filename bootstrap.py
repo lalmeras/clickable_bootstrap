@@ -28,7 +28,7 @@ MINICONDA_INSTALLER_URL = \
   'https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh'
 
 
-def _run(args, debug=False, env=None):
+def _run(args, debug=False, **subprocess_args):
     """Run a command, with stdout and stderr connected to the current terminal.
     Log command if debug=True.
     """
@@ -37,14 +37,15 @@ def _run(args, debug=False, env=None):
         # python2.6: index is mandatory
         command = ' '.join([pipes.quote(i) for i in args])
         print('[cmd] {0}'.format(command), file=sys.stderr)
+        env = subprocess_args.get('env', None)
         if env:
             # print current environment
             # python2.6: index is mandatory
             env_str = ' '.join(['{0}={1}'.format(k, pipes.quote(v))
-                                for k, v in env])
-            print('[cmd] env={0}'.format(env_str), file=sys.stderr)
+                                for k, v in env.items()])
+            print('[cmd] env:{0}'.format(env_str), file=sys.stderr)
     # call command
-    subprocess.check_call(args, env=env)
+    subprocess.check_call(args, **subprocess_args)
 
 
 def _download(url, debug=False):
