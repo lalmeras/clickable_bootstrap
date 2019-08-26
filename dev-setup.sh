@@ -32,8 +32,9 @@ echo "Load main conda environment"
 conda activate "${conda_prefix}/${CONDA_ENV}"
 
 # create runtime environments
-envs=( py27 py34 py35 py36 py37 )
+envs=( py26 py27 py34 py35 py36 py37 )
 declare -A versions
+versions[py26]=2.6
 versions[py27]=2.7
 versions[py34]=3.4
 versions[py35]=3.5
