@@ -4,4 +4,4 @@ python:
 install: ./dev-setup.sh
 script:
   - .conda/main/bin/tox
-  - ./dev-test-python-2.6.sh
+  - ./dev-test-python2.6.sh

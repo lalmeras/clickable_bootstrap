@@ -28,6 +28,6 @@ To launch tox tests
 # To launch python 2.7 - 3.7 tests
 .conda/main/bin/tox
 # To launch python 2.6 tests
-./dev-test-python-2.6.sh
+./dev-test-python2.6.sh
 ```
 
