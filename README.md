@@ -4,9 +4,10 @@ TODO
 
 # Tests
 
-Tests are launched for python 2.7, 3.4, 3.5, 3.6 and 3.7.
+Tests are launched for python 2.6, 2.7, 3.4, 3.5, 3.6 and 3.7.
 
-Tests use conda to provide python runtimes, and tox for management.
+Tests use conda to provide python runtimes, and tox for management. pytest is
+directly used for python 2.6 (tox does not support python 2.6).
 
 To install conda command :
 
@@ -24,6 +25,9 @@ To install and prepare python runtimes
 To launch tox tests
 
 ``` bash
+# To launch python 2.7 - 3.7 tests
 .conda/main/bin/tox
+# To launch python 2.6 tests
+./dev-test-python-2.6.sh
 ```
 
