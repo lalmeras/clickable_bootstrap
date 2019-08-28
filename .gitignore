@@ -1,6 +1,7 @@
 .conda/
 .tox/
 __pycache__/
+.cache/
 
 *.pyc
 *.swp

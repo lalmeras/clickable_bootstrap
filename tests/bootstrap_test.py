@@ -2,6 +2,11 @@
 # -*- encoding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4 expandtab ai
 
+import os
+import py
+import pytest
+import shutil
+
 def _out(capture):
     """pytest for python 2.6 uses tuple instead of attributes"""
     try:
@@ -69,3 +74,34 @@ def test_run_debug_env(capfd):
     assert '[cmd] echo -n hello world\n' \
             + '[cmd] env:TEST1=VALUE1 TEST2=VALUE2\n' == _err(captured)
     assert 'hello world' == _out(captured)
+
+def test_download_success(capfd, tmpdir):
+    """check that download can be done, and the location of
+    provided file"""
+    from bootstrap import _download
+    handle = _download('http://google.fr',
+                       _tmpdir=str(tmpdir))
+    # check that only one file is created in tempdir 
+    assert len(tmpdir.listdir()) == 1
+    # check that download file is child of tempdir
+    assert tmpdir.common(py.path.local(handle[1])) == tmpdir
+    captured = capfd.readouterr()
+    #assert '' == _err(captured) #curl is verbose
+    assert '' == _out(captured)
+    shutil.rmtree(str(tmpdir))
+
+
+def test_download_error(capfd, tmpdir):
+    from bootstrap import _download
+    def f():
+        _download('http://notexistingdomain.not',
+                  _tmpdir=str(tmpdir))
+    pytest.raises(Exception, f)
+    # check that no file is created
+    assert len(tmpdir.listdir()) == 0
+    captured = capfd.readouterr()
+    #assert '' == _err(captured) #curl is verbose
+    assert '' == _out(captured)
+    shutil.rmtree(str(tmpdir))
+
+

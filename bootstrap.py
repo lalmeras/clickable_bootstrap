@@ -48,13 +48,16 @@ def _run(args, debug=False, **subprocess_args):
     subprocess.check_call(args, **subprocess_args)
 
 
-def _download(url, debug=False):
+def _download(url, debug=False, _tmpdir=None):
     """Download a file and return tuple of (fd, abspath).
     Caller is responsible for deleting file.
     Exception if download cannot be performed.
+
+    _tmpdir argument is intended for testing purpose.
     """
     # Miniconda script raise an error if script is not called something.sh
-    (handle, abspath) = tempfile.mkstemp(prefix='bootstrap', suffix='.sh')
+    (handle, abspath) = tempfile.mkstemp(prefix='bootstrap', suffix='.sh',
+                                         dir=_tmpdir)
     os.close(handle)
     try:
         args = ['curl', '-v' if debug else None, '-o', abspath, url]
