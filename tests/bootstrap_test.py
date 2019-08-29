@@ -5,6 +5,7 @@
 import os
 import py
 import pytest
+import re
 import shutil
 
 def _out(capture):
@@ -104,4 +105,86 @@ def test_download_error(capfd, tmpdir):
     assert '' == _out(captured)
     shutil.rmtree(str(tmpdir))
 
+def test_command():
+    from bootstrap import _command
+    assert ['/prefix/bin/command', 'param1', 'param2'] == \
+            _command('/prefix', 'command', 'param1', 'param2')
 
+def test_prepare_conda_not_existing(capfd, tmpdir):
+    """If provided prefix is not existing, but parent of prefix exists,
+    then nothing is done (prefix does not exist and parent directory is
+    untouched)."""
+    from bootstrap import _prepare_conda
+    conda = tmpdir.join('conda')
+    assert not conda.exists()
+    _prepare_conda(str(conda), False)
+    assert not conda.exists()
+    captured = capfd.readouterr()
+    assert '' == _err(captured)
+    assert '' == _out(captured)
+
+def test_prepare_conda_existing(capfd, tmpdir):
+    """If provided prefix exists, nothhing is done (prefix does not exist
+    and parent directory is untouched)."""
+    from bootstrap import _prepare_conda
+    conda = tmpdir.join('conda').mkdir()
+    _prepare_conda(str(conda), False)
+    assert conda.exists()
+    assert conda.isdir()
+    captured = capfd.readouterr()
+    assert '' == _err(captured)
+    assert '' == _out(captured)
+
+def test_prepare_conda_subdir(capfd, tmpdir):
+    """If prefix' parent directory does not exist, it is created. Prefix
+    is not created."""
+    from bootstrap import _prepare_conda
+    conda = tmpdir.join('conda/subdir')
+    _prepare_conda(str(conda), False)
+    assert not conda.exists()
+    assert conda.join('/..').isdir()
+    captured = capfd.readouterr()
+    assert '[INFO] Creating directory {0}\n'.format(str(conda.join('/..'))) == _err(captured)
+    assert '' == _out(captured)
+
+def test_prepare_conda_reset_existing(capfd, tmpdir):
+    """If existing conda prefix exists and reset=True, it is deleted."""
+    from bootstrap import _prepare_conda
+    conda = tmpdir.join('conda').mkdir()
+    _prepare_conda(str(conda), True)
+    assert not conda.exists() and conda.join('/..').exists()
+    captured = capfd.readouterr()
+    assert '[INFO] Destroying existing env {0}\n'.format(str(conda)) == _err(captured)
+    assert '' == _out(captured)
+
+def test_prepare_conda_reset_invalid(capfd, tmpdir):
+    """If existing conda prefix exists and reset=True, but cannot be deleted,
+    an exception is raised."""
+    from bootstrap import _prepare_conda
+    import stat
+    conda = tmpdir.join('conda')
+    conda.mkdir()
+    os.chmod(str(tmpdir), ~stat.S_IWUSR & ~stat.S_IWGRP & ~stat.S_IWOTH)
+    def f():
+        _prepare_conda(str(conda), True)
+    pytest.raises(Exception, f)
+    captured = capfd.readouterr()
+    assert '[INFO] Destroying existing env {0}\n'.format(str(conda)) == _err(captured)
+    assert '' == _out(captured)
+
+def test_prepare_conda_parent_invalid(capfd, tmpdir):
+    """If existing conda prefix and parent does not exist, but cannot be
+    deleted, an exception is raised."""
+    from bootstrap import _prepare_conda
+    import stat
+    conda = tmpdir.join('conda/subdir')
+    os.chmod(str(tmpdir), ~stat.S_IWUSR & ~stat.S_IWGRP & ~stat.S_IWOTH)
+    def f():
+        _prepare_conda(str(conda), False)
+    pytest.raises(Exception, f)
+    assert not conda.exists()
+    assert not conda.join('/..').exists()
+    assert tmpdir.exists()
+    captured = capfd.readouterr()
+    assert '[INFO] Creating directory {0}\n'.format(str(conda.join('/..'))) == _err(captured)
+    assert '' == _out(captured)

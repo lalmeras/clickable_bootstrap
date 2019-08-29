@@ -99,12 +99,11 @@ def _prepare_conda(prefix, reset_conda):
             os.makedirs(prefix_parent)
         except Exception:
             # python2.6: index is mandatory
-            raise Exception("Error creating {0}".format(prefix_parent),
-                            file=sys.stderr)
+            raise Exception("Error creating {0}".format(prefix_parent))
     if reset_conda:
         if os.path.exists(prefix):
             # python2.6: index is mandatory
-            print("[INFO] Destroying existing env: {0}.".format(prefix),
+            print("[INFO] Destroying existing env {0}".format(prefix),
                   file=sys.stderr)
             shutil.rmtree(prefix)
 
