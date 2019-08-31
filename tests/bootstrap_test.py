@@ -207,3 +207,21 @@ def test_skip_env_install_not_skip(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '' == _out(captured)
     assert '' == _err(captured)
+
+def test_skip_miniconda_skip(capfd, tmpdir):
+    """If miniconda prefix exists, return True"""
+    from bootstrap import _skip_miniconda
+    assert True == _skip_miniconda(str(tmpdir))
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('--reset-conda', _err(captured))
+    assert None != re.search('already exists', _err(captured))
+
+def test_skip_miniconda_skip(capfd, tmpdir):
+    """If miniconda prefix exists, return True"""
+    from bootstrap import _skip_miniconda
+    prefix = tmpdir.join('prefix')
+    assert False == _skip_miniconda(str(prefix))
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert '' == _err(captured)
