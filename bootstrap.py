@@ -165,14 +165,13 @@ def _env_remove(prefix, name):
     """Remove an existing conda environment named 'name'."""
     # python2.6: index is mandatory
     print("[INFO] Removing {0} ".format(name), file=sys.stderr)
-    try:
-        subprocess.check_output(_command(prefix, 'conda', 'env',
-                                         'remove', '-n', name, '-y'),
-                                stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
+    returncode, output = _subprocess_capture(
+        _command(prefix, 'conda',
+                 'env', 'remove', '-n', name, '-y'))
+    if returncode != 0:
         # python2.6: index is mandatory
         raise Exception("[FATAL] Error removing {0}: {1}"
-                        .format(name, e.output))
+                        .format(name, output))
 
 
 def _env_create(prefix, name):

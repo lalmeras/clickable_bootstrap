@@ -7,6 +7,7 @@ import py
 import pytest
 import re
 import shutil
+import stat
 
 def _out(capture):
     """pytest for python 2.6 uses tuple instead of attributes"""
@@ -164,7 +165,6 @@ def test_prepare_conda_reset_invalid(capfd, tmpdir):
     """If existing conda prefix exists and reset=True, but cannot be deleted,
     an exception is raised."""
     from bootstrap import _prepare_conda
-    import stat
     conda = tmpdir.join('conda')
     conda.mkdir()
     os.chmod(str(tmpdir), ~stat.S_IWUSR & ~stat.S_IWGRP & ~stat.S_IWOTH)
@@ -181,7 +181,6 @@ def test_prepare_conda_parent_invalid(capfd, tmpdir):
     """If existing conda prefix and parent does not exist, but cannot be
     deleted, an exception is raised."""
     from bootstrap import _prepare_conda
-    import stat
     conda = tmpdir.join('conda/subdir')
     os.chmod(str(tmpdir), ~stat.S_IWUSR & ~stat.S_IWGRP & ~stat.S_IWOTH)
     def f():
@@ -239,10 +238,8 @@ def test_skip_miniconda_skip(capfd, tmpdir):
 def test_env_exists_yes(capfd, tmpdir):
     """If environment is listed by conda, return True"""
     from bootstrap import _env_exists
-    import stat
     conda = tmpdir.join('bin/conda')
-    conda.write(_success_script(), ensure=True)
-    conda.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    _success_script(conda)
     assert True == _env_exists(str(tmpdir), 'test')
     captured = capfd.readouterr()
     assert '' == _out(captured)
@@ -252,10 +249,8 @@ def test_env_exists_yes(capfd, tmpdir):
 def test_env_exists_no(capfd, tmpdir):
     """If environment is not listed by conda, return False"""
     from bootstrap import _env_exists
-    import stat
     conda = tmpdir.join('bin/conda')
-    conda.write(_error_script(), ensure=True)
-    conda.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    _error_script(conda)
     assert False == _env_exists(str(tmpdir), 'test')
     captured = capfd.readouterr()
     assert '' == _out(captured)
@@ -265,10 +260,8 @@ def test_env_exists_no(capfd, tmpdir):
 def test_env_exists_no_debug(capfd, tmpdir):
     """If environment is not listed by conda, return False"""
     from bootstrap import _env_exists
-    import stat
     conda = tmpdir.join('bin/conda')
-    conda.write(_error_script(), ensure=True)
-    conda.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    _error_script(conda)
     assert False == _env_exists(str(tmpdir), 'test', debug=True)
     captured = capfd.readouterr()
     assert '' == _out(captured)
@@ -276,8 +269,14 @@ def test_env_exists_no_debug(capfd, tmpdir):
     assert None != re.search('error_str', _err(captured))
     shutil.rmtree(str(tmpdir))
 
-def _success_script():
-    return "#! /bin/bash\nexit 0\n"
+def test_env_remove_ok(capfd, tmpdir):
+    from bootstrap import _env_remove
 
-def _error_script():
-    return "#! /bin/bash\necho error_str\nexit 1\n"
+def _success_script(lpath):
+    lpath.write("#! /bin/bash\nexit 0\n", ensure=True)
+    lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+def _error_script(lpath):
+    lpath.write("#! /bin/bash\necho error_str\nexit 1\n",
+                ensure=True)
+    lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
