@@ -91,7 +91,6 @@ def test_download_success(capfd, tmpdir):
     assert '' == _out(captured)
     shutil.rmtree(str(tmpdir))
 
-
 def test_download_error(capfd, tmpdir):
     from bootstrap import _download
     def f():
@@ -122,6 +121,7 @@ def test_prepare_conda_not_existing(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '' == _err(captured)
     assert '' == _out(captured)
+    shutil.rmtree(str(tmpdir))
 
 def test_prepare_conda_existing(capfd, tmpdir):
     """If provided prefix exists, nothhing is done (prefix does not exist
@@ -134,6 +134,7 @@ def test_prepare_conda_existing(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '' == _err(captured)
     assert '' == _out(captured)
+    shutil.rmtree(str(tmpdir))
 
 def test_prepare_conda_subdir(capfd, tmpdir):
     """If prefix' parent directory does not exist, it is created. Prefix
@@ -146,6 +147,7 @@ def test_prepare_conda_subdir(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '[INFO] Creating directory {0}\n'.format(str(conda.join('/..'))) == _err(captured)
     assert '' == _out(captured)
+    shutil.rmtree(str(tmpdir))
 
 def test_prepare_conda_reset_existing(capfd, tmpdir):
     """If existing conda prefix exists and reset=True, it is deleted."""
@@ -156,6 +158,7 @@ def test_prepare_conda_reset_existing(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '[INFO] Destroying existing env {0}\n'.format(str(conda)) == _err(captured)
     assert '' == _out(captured)
+    shutil.rmtree(str(tmpdir))
 
 def test_prepare_conda_reset_invalid(capfd, tmpdir):
     """If existing conda prefix exists and reset=True, but cannot be deleted,
@@ -171,6 +174,8 @@ def test_prepare_conda_reset_invalid(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '[INFO] Destroying existing env {0}\n'.format(str(conda)) == _err(captured)
     assert '' == _out(captured)
+    os.chmod(str(tmpdir), stat.S_IWUSR | stat.S_IRUSR | stat.S_IXUSR)
+    shutil.rmtree(str(tmpdir))
 
 def test_prepare_conda_parent_invalid(capfd, tmpdir):
     """If existing conda prefix and parent does not exist, but cannot be
@@ -188,6 +193,7 @@ def test_prepare_conda_parent_invalid(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '[INFO] Creating directory {0}\n'.format(str(conda.join('/..'))) == _err(captured)
     assert '' == _out(captured)
+    shutil.rmtree(str(tmpdir))
 
 def test_skip_env_install_skip(capfd, tmpdir):
     """If no environment file, install is skipped"""
@@ -197,6 +203,7 @@ def test_skip_env_install_skip(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '' == _out(captured)
     assert None != re.search('Environment file .* missing', _err(captured))
+    shutil.rmtree(str(tmpdir))
 
 def test_skip_env_install_not_skip(capfd, tmpdir):
     """If environment file, return file path"""
@@ -207,6 +214,7 @@ def test_skip_env_install_not_skip(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '' == _out(captured)
     assert '' == _err(captured)
+    shutil.rmtree(str(tmpdir))
 
 def test_skip_miniconda_skip(capfd, tmpdir):
     """If miniconda prefix exists, return True"""
@@ -216,6 +224,7 @@ def test_skip_miniconda_skip(capfd, tmpdir):
     assert '' == _out(captured)
     assert None != re.search('--reset-conda', _err(captured))
     assert None != re.search('already exists', _err(captured))
+    shutil.rmtree(str(tmpdir))
 
 def test_skip_miniconda_skip(capfd, tmpdir):
     """If miniconda prefix exists, return True"""
@@ -225,3 +234,50 @@ def test_skip_miniconda_skip(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '' == _out(captured)
     assert '' == _err(captured)
+    shutil.rmtree(str(tmpdir))
+
+def test_env_exists_yes(capfd, tmpdir):
+    """If environment is listed by conda, return True"""
+    from bootstrap import _env_exists
+    import stat
+    conda = tmpdir.join('bin/conda')
+    conda.write(_success_script(), ensure=True)
+    conda.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    assert True == _env_exists(str(tmpdir), 'test')
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert '' == _err(captured)
+    shutil.rmtree(str(tmpdir))
+
+def test_env_exists_no(capfd, tmpdir):
+    """If environment is not listed by conda, return False"""
+    from bootstrap import _env_exists
+    import stat
+    conda = tmpdir.join('bin/conda')
+    conda.write(_error_script(), ensure=True)
+    conda.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    assert False == _env_exists(str(tmpdir), 'test')
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert '' == _err(captured)
+    shutil.rmtree(str(tmpdir))
+
+def test_env_exists_no_debug(capfd, tmpdir):
+    """If environment is not listed by conda, return False"""
+    from bootstrap import _env_exists
+    import stat
+    conda = tmpdir.join('bin/conda')
+    conda.write(_error_script(), ensure=True)
+    conda.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    assert False == _env_exists(str(tmpdir), 'test', debug=True)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('Trigger .* creation', _err(captured))
+    assert None != re.search('error_str', _err(captured))
+    shutil.rmtree(str(tmpdir))
+
+def _success_script():
+    return "#! /bin/bash\nexit 0\n"
+
+def _error_script():
+    return "#! /bin/bash\necho error_str\nexit 1\n"

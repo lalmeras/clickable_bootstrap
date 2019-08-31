@@ -134,18 +134,22 @@ def _skip_miniconda(prefix):
 def _env_exists(prefix, name, debug=False):
     """Check if environment named 'name' exists."""
     env_exists = False
-    try:
-        # TODO: check env is deactivated before removal
-        subprocess.check_output(_command(prefix, 'conda',
-                                         'list', '-n', name),
-                                stderr=subprocess.STDOUT)
-        env_exists = True
-    except subprocess.CalledProcessError as e:
+    output = None
+    # TODO: check env is deactivated before removal
+    p = subprocess.Popen(
+            _command(prefix, 'conda',
+                     'list', '-n', name),
+                     stdout=subprocess.PIPE,
+                     stderr=subprocess.STDOUT)
+    output = p.communicate()[0]
+    if p.returncode != 0:
         if debug:
             # python2.6: index is mandatory
             print("[DEBUG] Trigger {0} creation as conda list failed: {1}"
-                  .format(name, e.output),
+                  .format(name, output),
                   file=sys.stderr)
+    else:
+        env_exists = True
     return env_exists
 
 
