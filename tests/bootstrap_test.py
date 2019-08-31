@@ -271,6 +271,26 @@ def test_env_exists_no_debug(capfd, tmpdir):
 
 def test_env_remove_ok(capfd, tmpdir):
     from bootstrap import _env_remove
+    conda = tmpdir.join('bin/conda')
+    _success_script(conda)
+    _env_remove(str(tmpdir), 'test')
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('removing', _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+def test_env_remove_nok(capfd, tmpdir):
+    from bootstrap import _env_remove
+    conda = tmpdir.join('bin/conda')
+    _error_script(conda)
+    def f():
+        _env_remove(str(tmpdir), 'test')
+    e = pytest.raises(Exception, f)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('removing', _err(captured), flags=re.I)
+    assert None != re.search('error removing', str(e.value), flags=re.I)
+    shutil.rmtree(str(tmpdir))
 
 def _success_script(lpath):
     lpath.write("#! /bin/bash\nexit 0\n", ensure=True)
