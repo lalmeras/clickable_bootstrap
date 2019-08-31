@@ -188,3 +188,22 @@ def test_prepare_conda_parent_invalid(capfd, tmpdir):
     captured = capfd.readouterr()
     assert '[INFO] Creating directory {0}\n'.format(str(conda.join('/..'))) == _err(captured)
     assert '' == _out(captured)
+
+def test_skip_env_install_skip(capfd, tmpdir):
+    """If no environment file, install is skipped"""
+    from bootstrap import _skip_env_install
+    env = tmpdir.join('environment')
+    assert None == _skip_env_install(str(env))
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('Environment file .* missing', _err(captured))
+
+def test_skip_env_install_not_skip(capfd, tmpdir):
+    """If environment file, return file path"""
+    from bootstrap import _skip_env_install
+    env = tmpdir.join('environment')
+    env.ensure(file=True)
+    assert str(env) == _skip_env_install(str(env))
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert '' == _err(captured)
