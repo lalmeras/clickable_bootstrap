@@ -225,18 +225,16 @@ def _handle_bootstrap_command(prefix, name):
         # python2.6: index is mandatory
         print("[INFO] Running in env {1} > {0}".format(command, name),
               file=sys.stderr)
-        try:
-            activate_conda = ['.', os.path.join(prefix, 'bin/activate')]
-            activate_env = ['conda', 'activate', pipes.quote(name)]
-            whole_command = ' '.join(activate_conda +
-                                     ['&&'] + activate_env +
-                                     ['&&'] + [command])
-            subprocess.check_call(whole_command, shell=True,
-                                  stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as e:
+        activate_conda = ['.', os.path.join(prefix, 'bin/activate')]
+        activate_env = ['conda', 'activate', pipes.quote(name)]
+        whole_command = ' '.join(activate_conda +
+                                 ['&&'] + activate_env +
+                                 ['&&'] + [command])
+        returncode, output = _subprocess_capture(whole_command, shell=True)
+        if returncode != 0:
             # python2.6: index is mandatory
             raise Exception("[FATAL] Error running {0}: {1}"
-                            .format(command, e.output))
+                            .format(command, output))
 
 
 def _miniconda_install(prefix, debug=False, removals=None):

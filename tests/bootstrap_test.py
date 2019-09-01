@@ -9,6 +9,43 @@ import re
 import shutil
 import stat
 
+class EnvOverrides(object):
+    """This class allows to register environment modification so that it
+    can be resetted when test ends"""
+    def __init__(self):
+        self._orig = dict()
+        self._reset = []
+
+    def __getitem__(self, key):
+        return os.environ[key]
+
+    def __setitem__(self, key, data):
+        if key in os.environ and not key in self._orig:
+            self._orig[key] = os.environ[key]
+        elif key not in self._orig:
+            self._reset.append(key)
+        os.environ[key] = data
+
+    def __delitem__(self, key):
+        if key in os.environ and not key in self._orig:
+            self._orig[key] = os.environ[key]
+        del os.environ[key]
+
+    def restore(self):
+        for key in self._reset:
+            if key in os.environ:
+                del os.environ[key]
+        for key, value in self._orig:
+            os.environ[key] = value
+
+@pytest.fixture(scope="function")
+def environment():
+    """This fixture provides a variable to modify environment variables; when
+    test finishes, modifications are erased"""
+    environment = EnvOverrides()
+    yield environment
+    environment.restore()
+
 def _out(capture):
     """pytest for python 2.6 uses tuple instead of attributes"""
     try:
@@ -390,6 +427,48 @@ def test_handle_env_no_environment_file(capfd, tmpdir):
     assert None == re.search('installing', _err(captured), flags=re.I)
     shutil.rmtree(str(tmpdir))
 
+def test_handle_env_no_environment_file(capfd, tmpdir):
+    from bootstrap import _handle_env
+    conda = tmpdir.join('bin/conda')
+    _fake_conda_script(conda, 0, 1, 0, 0)
+    _handle_env(str(tmpdir), 'test', None, False)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None == re.search('removing', _err(captured), flags=re.I)
+    assert None == re.search('--reset-env', _err(captured), flags=re.I)
+    assert None != re.search('creating', _err(captured), flags=re.I)
+    assert None == re.search('installing', _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+def test_handle_bootstrap_command(capfd, tmpdir, environment):
+    from bootstrap import _handle_bootstrap_command
+    command = 'echo bootstrap'
+    environment['BOOTSTRAP_COMMAND'] = command
+    activate = tmpdir.join('bin/activate')
+    _fake_activate_script(activate)
+    _handle_bootstrap_command(str(tmpdir), 'test')
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('running', _err(captured), flags=re.I)
+    assert None != re.search(command, _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+def test_handle_bootstrap_command_ko(capfd, tmpdir, environment):
+    from bootstrap import _handle_bootstrap_command
+    command = 'false'
+    environment['BOOTSTRAP_COMMAND'] = command
+    activate = tmpdir.join('bin/activate')
+    _fake_activate_script(activate)
+    def f():
+        _handle_bootstrap_command(str(tmpdir), 'test')
+    e = pytest.raises(Exception, f)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('running', _err(captured), flags=re.I)
+    assert None != re.search(command, _err(captured), flags=re.I)
+    assert None != re.search('error running', str(e.value), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
 # TODO: test basic conda commands
 
 def _success_script(lpath):
@@ -409,4 +488,12 @@ def _fake_conda_script(lpath, create_status, list_status, install_status,
 [ "$2" == "update" ] && exit {2};
 [ "$2" == "remove" ] && exit {2};
 """.format(create_status, list_status, install_status), ensure=True)
+    lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+def _fake_activate_script(lpath):
+    lpath.write("""#! /bin/bash
+conda () {{
+    return 0;
+}}
+""".format(), ensure=True)
     lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
