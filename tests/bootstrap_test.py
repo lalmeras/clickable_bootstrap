@@ -338,6 +338,60 @@ def test_env_install_nok(capfd, tmpdir):
     assert None != re.search('error installing', str(e.value), flags=re.I)
     shutil.rmtree(str(tmpdir))
 
+def test_handle_env_no_reset(capfd, tmpdir):
+    from bootstrap import _handle_env
+    conda = tmpdir.join('bin/conda')
+    _fake_conda_script(conda, 0, 1, 0, 0)
+    _handle_env(str(tmpdir), 'test', 'fakearg', False)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None == re.search('removing', _err(captured), flags=re.I)
+    assert None == re.search('--reset-env', _err(captured), flags=re.I)
+    assert None != re.search('creating', _err(captured), flags=re.I)
+    assert None != re.search('installing', _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+def test_handle_env_reset(capfd, tmpdir):
+    from bootstrap import _handle_env
+    conda = tmpdir.join('bin/conda')
+    _fake_conda_script(conda, 0, 0, 0, 0)
+    _handle_env(str(tmpdir), 'test', 'fakearg', True)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('removing', _err(captured), flags=re.I)
+    assert None == re.search('--reset-env', _err(captured), flags=re.I)
+    assert None != re.search('creating', _err(captured), flags=re.I)
+    assert None != re.search('installing', _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+def test_handle_env_exists(capfd, tmpdir):
+    from bootstrap import _handle_env
+    conda = tmpdir.join('bin/conda')
+    _fake_conda_script(conda, 0, 0, 0, 0)
+    _handle_env(str(tmpdir), 'test', 'fakearg', False)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None == re.search('removing', _err(captured), flags=re.I)
+    assert None != re.search('--reset-env', _err(captured), flags=re.I)
+    assert None == re.search('creating', _err(captured), flags=re.I)
+    assert None != re.search('installing', _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+def test_handle_env_no_environment_file(capfd, tmpdir):
+    from bootstrap import _handle_env
+    conda = tmpdir.join('bin/conda')
+    _fake_conda_script(conda, 0, 1, 0, 0)
+    _handle_env(str(tmpdir), 'test', None, False)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None == re.search('removing', _err(captured), flags=re.I)
+    assert None == re.search('--reset-env', _err(captured), flags=re.I)
+    assert None != re.search('creating', _err(captured), flags=re.I)
+    assert None == re.search('installing', _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+# TODO: test basic conda commands
+
 def _success_script(lpath):
     lpath.write("#! /bin/bash\nexit 0\n", ensure=True)
     lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
@@ -345,4 +399,14 @@ def _success_script(lpath):
 def _error_script(lpath):
     lpath.write("#! /bin/bash\necho error_str\nexit 1\n",
                 ensure=True)
+    lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+def _fake_conda_script(lpath, create_status, list_status, install_status,
+                       remove_status):
+    lpath.write("""#! /bin/bash
+[ "$1" == "create" ] && exit {0};
+[ "$1" == "list" ] && exit {1};
+[ "$2" == "update" ] && exit {2};
+[ "$2" == "remove" ] && exit {2};
+""".format(create_status, list_status, install_status), ensure=True)
     lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
