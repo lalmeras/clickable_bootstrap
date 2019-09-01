@@ -178,29 +178,25 @@ def _env_create(prefix, name):
     """Create a new Conda environment named 'name'."""
     # python2.6: index is mandatory
     print("[INFO] Creating {0} ".format(name), file=sys.stderr)
-    try:
-        subprocess.check_output(_command(prefix, 'conda',
-                                         'create', '-n', name, '-y'),
-                                stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
+    returncode, output = _subprocess_capture(
+        _command(prefix, 'conda', 'create', '-n', name, '-y'))
+    if returncode != 0:
         # python2.6: index is mandatory
         raise Exception("[FATAL] Error creating {0}: {1}"
-                        .format(name, e.output))
+                        .format(name, output))
 
 
 def _env_install(prefix, name, environment):
     """Use a environment.yml file to initialize 'name' environment."""
     # python2.6: index is mandatory
     print("[INFO] Installing {0} ".format(name), file=sys.stderr)
-    try:
-        subprocess.check_output(_command(prefix, 'conda',
-                                         'env', 'update', '-n', name,
-                                         '--file', environment),
-                                stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
+    returncode, output = _subprocess_capture(
+        _command(prefix, 'conda', 'env', 'update', '-n', name,
+                 '--file', environment))
+    if returncode != 0:
         # python2.6: index is mandatory
         raise Exception("[FATAL] Error installing {0}: {1}"
-                        .format(name, e.output))
+                        .format(name, output))
 
 
 def _handle_env(prefix, name, environment, reset_env):
