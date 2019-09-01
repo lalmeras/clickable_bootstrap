@@ -292,6 +292,29 @@ def test_env_remove_nok(capfd, tmpdir):
     assert None != re.search('error removing', str(e.value), flags=re.I)
     shutil.rmtree(str(tmpdir))
 
+def test_env_create_ok(capfd, tmpdir):
+    from bootstrap import _env_create
+    conda = tmpdir.join('bin/conda')
+    _success_script(conda)
+    _env_create(str(tmpdir), 'test')
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('creating', _err(captured), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+def test_env_create_nok(capfd, tmpdir):
+    from bootstrap import _env_create
+    conda = tmpdir.join('bin/conda')
+    _error_script(conda)
+    def f():
+        _env_create(str(tmpdir), 'test')
+    e = pytest.raises(Exception, f)
+    captured = capfd.readouterr()
+    assert '' == _out(captured)
+    assert None != re.search('creating', _err(captured), flags=re.I)
+    assert None != re.search('error creating', str(e.value), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
 def _success_script(lpath):
     lpath.write("#! /bin/bash\nexit 0\n", ensure=True)
     lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
