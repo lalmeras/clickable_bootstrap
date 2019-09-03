@@ -250,7 +250,7 @@ fi
     # Download Miniconda
     (_, miniconda_script) = _download(MINICONDA_INSTALLER_URL,
                                       debug=debug)
-    if removals:
+    if removals is not None:
         removals.append(miniconda_script)
     # Run Miniconda
     miniconda_args = ['/bin/bash', miniconda_script,

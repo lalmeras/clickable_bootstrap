@@ -9,6 +9,8 @@ import re
 import shutil
 import stat
 
+from mock import patch
+
 class EnvOverrides(object):
     """This class allows to register environment modification so that it
     can be resetted when test ends"""
@@ -467,6 +469,28 @@ def test_handle_bootstrap_command_ko(capfd, tmpdir, environment):
     assert None != re.search('running', _err(captured), flags=re.I)
     assert None != re.search(command, _err(captured), flags=re.I)
     assert None != re.search('error running', str(e.value), flags=re.I)
+    shutil.rmtree(str(tmpdir))
+
+@patch('bootstrap._run')
+@patch('bootstrap._download')
+def test_miniconda_install(download, run, capfd, tmpdir, environment):
+    """Miniconda install; download is mocked to return a fake success script"""
+    import bootstrap
+    from bootstrap import _miniconda_install
+    miniconda_fake = tmpdir.join('miniconda.sh')
+    _success_script(miniconda_fake)
+    download.return_value = (None, str(miniconda_fake))
+    removals = []
+    _miniconda_install(str(tmpdir), debug=False, removals=removals)
+    captured = capfd.readouterr()
+    # install script is flag for removal
+    assert str(miniconda_fake) in removals
+    download.assert_called_with(bootstrap.MINICONDA_INSTALLER_URL, debug=False)
+    # no direct output
+    # (output is either from download - mocked -
+    # or miniconda install script - replaced with a fake script, and not run)
+    assert '' == _out(captured)
+    assert '' == _err(captured)
     shutil.rmtree(str(tmpdir))
 
 # TODO: test basic conda commands
