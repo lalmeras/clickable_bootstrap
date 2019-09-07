@@ -50,6 +50,16 @@ def environment():
     yield environment
     environment.restore()
 
+@pytest.fixture()
+def chdir():
+    import tempfile
+    newpath = tempfile.mkdtemp()
+    origpath = os.getcwd()
+    os.chdir(newpath)
+    yield py.path.local(newpath)
+    os.chdir(origpath)
+    shutil.rmtree(newpath)
+
 def _out(capture):
     """pytest for python 2.6 uses tuple instead of attributes"""
     try:
@@ -599,8 +609,42 @@ def test_print_activate_command_conda(capfd, tmpdir):
                              _err(captured))
     shutil.rmtree(str(tmpdir))
 
+def test_parser_env_bootstrap_path(environment, tmpdir):
+    """Test BOOTSTRAP_PATH related args"""
+    from bootstrap import _parser
+    environment['BOOTSTRAP_PATH'] = str(tmpdir)
+    p = _parser()
+    args = p.parse_args([])
+    # default name is defined from BOOTSTRAP_PATH basename
+    assert tmpdir.basename == vars(args)['name']
+    # default environment is defined from BOOTSTRAP_PATH basename
+    assert str(tmpdir.join('environment.yml')) == vars(args)['environment']
+    shutil.rmtree(str(tmpdir))
+
+def test_parser_other_env(environment):
+    """Test defaults from env for not interacting value"""
+    from bootstrap import _parser
+    environment['BOOTSTRAP_CONDA_PREFIX'] = 'fake-prefix'
+    environment['BOOTSTRAP_CONDA_ENVYML'] = 'fake-environment.yml'
+    environment['BOOTSTRAP_NAME'] = 'env-name'
+    p = _parser()
+    args = p.parse_args([])
+    assert 'env-name' == vars(args)['name']
+    assert 'fake-environment.yml' == vars(args)['environment']
+    assert 'fake-prefix' == vars(args)['prefix']
+
+def test_parser_defaults():
+    from bootstrap import _parser
+    p = _parser()
+    args = p.parse_args([])
+    assert False == vars(args)['reset_conda']
+    assert False == vars(args)['reset_env']
+    assert False == vars(args)['debug']
+    assert '~/.miniconda2' == vars(args)['prefix']
+    assert '~/.profile.d/bootstrap.conf' == vars(args)['profile_dir']
+    assert False == vars(args)['skip_activate_script']
+
 # TODO: test basic conda commands
-# TODO: test bootstrap-eactivate command with custom conda command
 
 def _success_script(lpath):
     lpath.write("#! /bin/bash\nexit 0\n", ensure=True)
