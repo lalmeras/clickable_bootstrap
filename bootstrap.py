@@ -364,7 +364,7 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
     command = None
     if bootstrap_activate_enabled:
         command = 'bootstrap-activate {0}'.format(pipes.quote(name))
-    elif bootstrap_activate_loadable:
+    elif not skip_activate_script:
         command = ACTIVATE_BOOTSTRAP_COMMAND.format(
             pipes.quote(real_bootstrap_conf_path), pipes.quote(name))
     else:
