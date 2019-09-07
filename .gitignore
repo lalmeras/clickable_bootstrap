@@ -5,3 +5,6 @@ __pycache__/
 
 *.pyc
 *.swp
+
+.coverage
+coverage_html_report
