@@ -26,6 +26,12 @@ boostrap.py install a working conda environment.
 """
 MINICONDA_INSTALLER_URL = \
   'https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh'
+ENV_BOOTSTRAP_NAME = 'BOOTSTRAP_NAME'
+ENV_BOOTSTRAP_CONDA_ENVYML = 'BOOTSTRAP_CONDA_ENVYML'
+ENV_BOOTSTRAP_CONDA_PREFIX = 'BOOTSTRAP_CONDA_PREFIX'
+ENV_BOOTSTRAP_PROFILE_DIR = 'BOOTSTRAP_PROFILE_DIR'
+ENV_BOOTSTRAP_COMMAND = 'BOOTSTRAP_COMMAND'
+ENV_BOOTSTRAP_PATH = 'BOOTSTRAP_PATH'
 
 
 def _run(args, debug=False, **subprocess_args):
@@ -220,7 +226,7 @@ def _handle_env(prefix, name, environment, reset_env):
 
 def _handle_bootstrap_command(prefix, name):
     """Run BOOTSTRAP_COMMAND in the Conda environment prefix:name."""
-    command = os.getenv('BOOTSTRAP_COMMAND', None)
+    command = os.getenv(ENV_BOOTSTRAP_COMMAND, None)
     if command is not None:
         # python2.6: index is mandatory
         print("[INFO] Running in env {1} > {0}".format(command, name),
@@ -494,18 +500,19 @@ def _parser():
     """Command line parsing"""
     # path for environment/pyproject.toml and determining bootstrap_name
     # is not provided
-    default_bootstrap_path = os.getenv('BOOTSTRAP_PATH', os.getcwd())
-    default_profile_dir = os.getenv('BOOTSTRAP_BIN_DIR', '~/.profile.d/bootstrap.conf')
+    default_bootstrap_path = os.getenv(ENV_BOOTSTRAP_PATH, os.getcwd())
+    default_profile_dir = os.getenv(ENV_BOOTSTRAP_PROFILE_DIR,
+                                    '~/.profile.d/bootstrap.conf')
     # default bootstrap_name
     default_bootstrap_name = os.getenv(
-        'BOOTSTRAP_NAME',
+        ENV_BOOTSTRAP_NAME,
         _default_bootstrap_name(default_bootstrap_path))
     # default conda prefix
-    default_conda_prefix = os.getenv('BOOTSTRAP_CONDA_PREFIX',
+    default_conda_prefix = os.getenv(ENV_BOOTSTRAP_CONDA_PREFIX,
                                      '~/.miniconda2')
     # default environment.yml path
     default_environment_yml = \
-        os.getenv('BOOTSTRAP_CONDA_ENVYML',
+        os.getenv(ENV_BOOTSTRAP_CONDA_ENVYML,
                   os.path.join(default_bootstrap_path, 'environment.yml'))
     cmd = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
     cmd.add_argument('--name',
