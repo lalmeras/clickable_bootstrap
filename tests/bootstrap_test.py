@@ -534,7 +534,6 @@ def test_bootstrap_activate(capfd, tmpdir):
     shutil.rmtree(str(tmpdir))
 
 # TODO: test basic conda commands
-# TODO: test bootstrap-activate command with custom conda command
 # TODO: test bootstrap-eactivate command with custom conda command
 
 def _success_script(lpath):
