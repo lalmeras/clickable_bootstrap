@@ -361,22 +361,28 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
                 print('[WARN ] Error checking if bootstrap.conf is sourced. '
                       'Assuming it is not sourced.',
                       file=sys.stderr)
-    command = None
+    activate_command = None
     if bootstrap_activate_enabled:
-        command = 'bootstrap-activate {0}'.format(pipes.quote(name))
+        activate_command = 'bootstrap-activate {0}'.format(pipes.quote(name))
+        deactivate_command = 'bootstrap-deactivate'
     elif not skip_activate_script:
-        command = ACTIVATE_BOOTSTRAP_COMMAND.format(
+        activate_command = ACTIVATE_BOOTSTRAP_COMMAND.format(
             pipes.quote(real_bootstrap_conf_path), pipes.quote(name))
+        deactivate_command = 'bootstrap-deactivate'
     else:
-        command = ACTIVATE_CONDA_COMMAND.format(
+        activate_command = ACTIVATE_CONDA_COMMAND.format(
             pipes.quote(os.path.join(prefix, 'bin', 'activate')),
             pipes.quote(name)
         )
+        deactivate_command = 'conda deactivate; conda deactivate'
     # print activation command-line
-    print(("[INFO] Run this command to initialize your env:\n\n" +
-         "{0}" +
+    print(("[INFO] Run this command to load/unload your env:\n\n" +
+         "# Activate environment\n" +
+         "{0}\n" +
+         "# Deactivate environment\n" +
+         "{1}\n"
          "\n")
-        .format(command),
+        .format(activate_command, deactivate_command),
         file=sys.stderr)
 
 
