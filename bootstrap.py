@@ -258,6 +258,7 @@ fi
     _run(miniconda_args, debug=debug)
 
 
+#: .format(bootstrap_d_path) ; activate script
 BOOTSTRAP_ACTIVATE_SCRIPT = """
 # Reload all environment files
 bootstrap-reload () {{
@@ -290,6 +291,7 @@ bootstrap-reload
 export BOOTSTRAP_ACTIVATE=1
 """
 
+#: .format(activate_script, env_name) ; conda activate
 ACTIVATE_SCRIPT = """
 activate-{1} () {{
     if [ -n "$BOOTSTRAP_ENV" ]; then
@@ -309,7 +311,9 @@ deactivate-{1} () {{
     unset BOOTSTRAP_ENV
 }}
 """
+#: command to activate conda env (bootstrap script non found)
 ACTIVATE_CONDA_COMMAND = "source {0} && conda activate {1}"
+#! command to activate conda env
 ACTIVATE_BOOTSTRAP_COMMAND = "source {0} && bootstrap-activate {1}"
 
 
