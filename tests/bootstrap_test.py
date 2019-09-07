@@ -39,7 +39,7 @@ class EnvOverrides(object):
         for key in self._reset:
             if key in os.environ:
                 del os.environ[key]
-        for key, value in self._orig:
+        for key, value in self._orig.items():
             os.environ[key] = value
 
 @pytest.fixture(scope="function")
@@ -531,6 +531,72 @@ def test_bootstrap_activate(capfd, tmpdir):
     # check that BOOTSTRAP_ENV is initialised
     assert None != re.search('current env: {0}\n'.format(name), _out(captured))
     assert 0 == p.returncode
+    shutil.rmtree(str(tmpdir))
+
+def test_fix_bootstrap_name():
+    """Only a-zA-Z0-9-_ kept for env name; replace all others chars by _"""
+    from bootstrap import _fix_bootstrap_name
+    assert 'envname' == _fix_bootstrap_name('envname')
+    assert 'EnvName' == _fix_bootstrap_name('EnvName')
+    assert 'envname0' == _fix_bootstrap_name('envname0')
+    assert '0envname' == _fix_bootstrap_name('0envname')
+    assert 'env_name' == _fix_bootstrap_name('env_name')
+    assert 'env-name' == _fix_bootstrap_name('env-name')
+    assert 'env_name' == _fix_bootstrap_name('env,name')
+    assert 'env_name' == _fix_bootstrap_name('env name')
+
+def test_print_activate_command(capfd, tmpdir):
+    """Check env activation command"""
+    from bootstrap import _print_activate_command
+    bootstrap_conf_path = tmpdir.join('bootstrap.conf')
+    _print_activate_command(str(tmpdir), 'env-name', str(bootstrap_conf_path),
+                            False)
+    assert tmpdir.join('bootstrap.conf.d').isdir()
+    assert tmpdir.join('bootstrap.conf.d').join('activate-env-name.conf').isfile()
+    captured = capfd.readouterr()
+    assert None != re.search('source {0}'.format(str(bootstrap_conf_path)),
+                             _err(captured))
+    assert None != re.search('bootstrap-activate {0}'.format('env-name'),
+                             _err(captured))
+    assert None != re.search('bootstrap-deactivate'.format('env-name'),
+                             _err(captured))
+    shutil.rmtree(str(tmpdir))
+
+def test_print_activate_command(capfd, tmpdir, environment):
+    """Check env activation command if bootstrap is detected as loaded"""
+    environment['BOOTSTRAP_ACTIVATE'] = '1'
+    from bootstrap import _print_activate_command
+    bootstrap_conf_path = tmpdir.join('bootstrap.conf')
+    _print_activate_command(str(tmpdir), 'env-name', str(bootstrap_conf_path),
+                            False)
+    assert tmpdir.join('bootstrap.conf.d').isdir()
+    assert tmpdir.join('bootstrap.conf.d').join('activate-env-name.conf').isfile()
+    captured = capfd.readouterr()
+    assert None == re.search('source {0}'.format(str(bootstrap_conf_path)),
+                             _err(captured))
+    assert None != re.search('bootstrap-activate {0}'.format('env-name'),
+                             _err(captured))
+    assert None != re.search('bootstrap-deactivate'.format('env-name'),
+                             _err(captured))
+    shutil.rmtree(str(tmpdir))
+
+def test_print_activate_command_conda(capfd, tmpdir):
+    """Check env activation command if bootstrap scripts are skipped"""
+    from bootstrap import _print_activate_command
+    bootstrap_conf_path = tmpdir.join('bootstrap.conf')
+    _print_activate_command(str(tmpdir), 'env-name', str(bootstrap_conf_path),
+                            True)
+    assert not tmpdir.join('bootstrap.conf.d').isdir()
+    assert not tmpdir.join('bootstrap.conf.d').join('activate-env-name.conf').isfile()
+    captured = capfd.readouterr()
+    assert None == re.search(str(bootstrap_conf_path),
+                             _err(captured))
+    assert None != re.search(str(tmpdir.join('bin/activate')),
+                             _err(captured))
+    assert None != re.search('conda activate {0}'.format('env-name'),
+                             _err(captured))
+    assert None != re.search('conda deactivate'.format('env-name'),
+                             _err(captured))
     shutil.rmtree(str(tmpdir))
 
 # TODO: test basic conda commands
