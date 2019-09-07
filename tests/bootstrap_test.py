@@ -8,8 +8,10 @@ import pytest
 import re
 import shutil
 import stat
+import subprocess
 
 from mock import patch
+from shellescape import quote
 
 class EnvOverrides(object):
     """This class allows to register environment modification so that it
@@ -493,7 +495,47 @@ def test_miniconda_install(download, run, capfd, tmpdir, environment):
     assert '' == _err(captured)
     shutil.rmtree(str(tmpdir))
 
+def test_bootstrap_activate(capfd, tmpdir):
+    """Test bootstrap-activate ENV command by:
+    * initialising scripts from BOOTSTRAP_* strings (one common file and
+      one file by environment
+    * using a custom 'conda activate' mock that prints the env name passed
+      as parameter
+    * checking the BOOTSTRAP_ENV environment variable"""
+    import bootstrap
+    name = 'env-name'
+    # fake conda script; just the activated env name
+    conda_fake = tmpdir.join('conda')
+    _fake_activate_script(conda_fake)
+    # prepare profile.d/bootstrap.d folders
+    profile_d = tmpdir.join('profile.d').mkdir()
+    bootstrap_d = profile_d.join('bootstrap.d').mkdir()
+    # profile.d/bootstrap.sh -> common file
+    bootstrap_sh = profile_d.join('bootstrap.sh')
+    bootstrap_sh.write(
+            bootstrap.BOOTSTRAP_ACTIVATE_SCRIPT.format(bootstrap_d))
+    # env related file: profile.d/bootstrap.d/ENV.conf
+    bootstrap_d.join('{0}.conf'.format(name)).write(
+            bootstrap.ACTIVATE_SCRIPT.format(str(conda_fake), name))
+    # activate environment
+    command = 'source {bootstrap_source};\
+               bootstrap-activate {name};\
+               echo current env: $BOOTSTRAP_ENV;'.format(
+            bootstrap_source=str(bootstrap_sh),
+            name=name)
+    p = subprocess.Popen(command, shell=True, executable='/bin/bash')
+    p.communicate()
+    captured = capfd.readouterr()
+    # result of 'conda activate env-name' call
+    assert None != re.search('env {0} activated\n'.format(name), _out(captured))
+    # check that BOOTSTRAP_ENV is initialised
+    assert None != re.search('current env: {0}\n'.format(name), _out(captured))
+    assert 0 == p.returncode
+    shutil.rmtree(str(tmpdir))
+
 # TODO: test basic conda commands
+# TODO: test bootstrap-activate command with custom conda command
+# TODO: test bootstrap-eactivate command with custom conda command
 
 def _success_script(lpath):
     lpath.write("#! /bin/bash\nexit 0\n", ensure=True)
@@ -517,7 +559,10 @@ def _fake_conda_script(lpath, create_status, list_status, install_status,
 def _fake_activate_script(lpath):
     lpath.write("""#! /bin/bash
 conda () {{
-    return 0;
+    if [ "$1" == "activate" ]; then
+        echo "env $2 activated"
+        return 0;
+    fi
 }}
 """.format(), ensure=True)
     lpath.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
