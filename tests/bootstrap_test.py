@@ -644,6 +644,16 @@ def test_parser_defaults():
     assert '~/.profile.d/bootstrap.conf' == vars(args)['profile_dir']
     assert False == vars(args)['skip_activate_script']
 
+def test_default_bootstrap_name(tmpdir):
+    from bootstrap import _default_bootstrap_name
+    # bootstrap name is bootstrap path basename
+    assert tmpdir.basename == _default_bootstrap_name(str(tmpdir))
+    # 'bootstrap' folders are ignored to search bootstrap name
+    bootstrap = tmpdir.join('bootstrap')
+    bootstrap.mkdir()
+    assert tmpdir.basename == _default_bootstrap_name(str(bootstrap))
+    shutil.rmtree(str(tmpdir))
+
 # TODO: test basic conda commands
 
 def _success_script(lpath):
