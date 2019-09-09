@@ -11,6 +11,7 @@ from __future__ import print_function, unicode_literals
 
 import argparse
 import io
+import logging
 import os
 import os.path
 import pipes
@@ -32,6 +33,54 @@ ENV_BOOTSTRAP_CONDA_PREFIX = 'BOOTSTRAP_CONDA_PREFIX'
 ENV_BOOTSTRAP_PROFILE_DIR = 'BOOTSTRAP_PROFILE_DIR'
 ENV_BOOTSTRAP_COMMAND = 'BOOTSTRAP_COMMAND'
 ENV_BOOTSTRAP_PATH = 'BOOTSTRAP_PATH'
+
+
+# from https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
+BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
+RESET_SEQ = "\033[0m"
+COLOR_SEQ = "\033[1;%dm"
+BOLD_SEQ  = "\033[1m"
+
+
+class CustomStreamHandler(logging.StreamHandler):
+    def __init__(self, *args, **kwargs):
+        logging.StreamHandler.__init__(self, *args, **kwargs)
+
+    def _mapColor(self, levelno):
+        if levelno in (logging.CRITICAL, logging.ERROR):
+            return RED
+        elif levelno in (logging.WARN,):
+            return YELLOW
+        elif levelno in (logging.INFO,):
+            return GREEN
+        elif levelno in (logging.DEBUG,):
+            return BLUE
+        else:
+            return None
+
+    def emit(self, record):
+        if sys.stderr.isatty():
+            color = self._mapColor(record.levelno)
+        else:
+            color = None
+        if color is None:
+            record.c_level = '[%(levelname)s]' % {"levelname": record.levelname}
+        else:
+            record.c_level = '%(color)s[%(levelname)s]%(reset)s' % \
+                {
+                    "color": COLOR_SEQ % (30 + color),
+                    "levelname": record.levelname,
+                    "reset": RESET_SEQ
+                }
+        
+        logging.StreamHandler.emit(self, record)
+
+
+def _initLogger():
+    ch = CustomStreamHandler(stream=sys.stderr)
+    ch.setFormatter(logging.Formatter('%(c_level)s %(message)s', None))
+    logging.root.addHandler(ch)
+    logging.root.setLevel(logging.INFO)
 
 
 def _run(args, debug=False, **subprocess_args):
@@ -406,10 +455,10 @@ def _bootstrap(prefix, name, environment, args,
 
     # some logging
     # python2.6: index is mandatory
-    print("[INFO] Using {0} as conda prefix".format(prefix), file=sys.stderr)
-    print("[INFO] Using {0} as environment name".format(name), file=sys.stderr)
-    print("[INFO] Using {0} as environment file".format(environment),
-          file=sys.stderr)
+    mainLogger = logging.getLogger('main')
+    mainLogger.info("Using {0} as conda prefix".format(prefix))
+    mainLogger.info("Using {0} as environment name".format(name))
+    mainLogger.info("Using {0} as environment file".format(environment))
 
     environment = _skip_env_install(environment)
     # prepare parent folders, reset conda if asked to
@@ -546,5 +595,6 @@ def _parser():
 
 
 if __name__ == '__main__':
+    _initLogger()
     args = _parser().parse_args()
     _bootstrap(**vars(args))
