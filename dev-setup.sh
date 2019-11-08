@@ -32,7 +32,7 @@ echo "Load main conda environment"
 conda activate "${conda_prefix}/${CONDA_ENV}"
 
 # create runtime environments
-envs=( py26 py27 py34 py35 py36 py37 )
+envs=( py26 py27 py34 py35 py36 py37 py38 )
 declare -A versions
 versions[py26]=2.6
 versions[py27]=2.7
@@ -40,15 +40,15 @@ versions[py34]=3.4
 versions[py35]=3.5
 versions[py36]=3.6
 versions[py37]=3.7
+versions[py38]=3.8
 
 for env_name in "${envs[@]}"; do
     echo "Create and install ${env_name}"
     version="${versions[${env_name}]}"
     conda create -q -y -p "${conda_prefix}/${env_name}" > /dev/null || \
         { echo "${env_name} creation failed; abort"; false; }
-    # anaconda repo is needed for python 3.4
-    # openssl support must be included for python 3.4 and 3.5
-    conda install -q -y -c anaconda -p "${conda_prefix}/${env_name}" python="${version}" pyopenssl > /dev/null || \
+    # anaconda repo is needed for python 2.6, 3.4
+    conda install -q -y -c anaconda -p "${conda_prefix}/${env_name}" python="${version}" > /dev/null || \
         { echo "${env_name} installation failed; abort"; false; }
 done
 
