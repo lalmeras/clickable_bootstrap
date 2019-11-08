@@ -21,6 +21,8 @@ import stat
 import subprocess
 import sys
 import tempfile
+import traceback
+
 
 COMMAND_DESCRIPTION = """
 boostrap.py install a working conda environment.
@@ -58,6 +60,13 @@ class CustomStreamHandler(logging.StreamHandler):
         else:
             return None
 
+    def _filterMethod(self, record):
+        if record.levelno in (logging.CRITICAL, logging.ERROR, logging.WARN,
+                logging.INFO):
+            return ""
+        else:
+            return " (%s)" % record.name
+
     def emit(self, record):
         if sys.stderr.isatty():
             color = self._mapColor(record.levelno)
@@ -72,38 +81,61 @@ class CustomStreamHandler(logging.StreamHandler):
                     "levelname": record.levelname,
                     "reset": RESET_SEQ
                 }
-        
+        record.x_method = self._filterMethod(record)
         logging.StreamHandler.emit(self, record)
 
 
 def _initLogger():
-    ch = CustomStreamHandler(stream=sys.stderr)
-    ch.setFormatter(logging.Formatter('%(c_level)s %(message)s', None))
+    # python2.6: stream named argument unsupported
+    ch = CustomStreamHandler(sys.stderr)
+    # [level colored] (method) message...
+    # (method) included only for debug
+    ch.setFormatter(logging.Formatter('%(c_level)s%(x_method)s %(message)s', None))
     logging.root.addHandler(ch)
     logging.root.setLevel(logging.INFO)
+    out = logging.StreamHandler(sys.stdout)
+    out.setFormatter(logging.Formatter('%(message)s'))
+    logging.getLogger('stdout').addHandler(out)
+    logging.getLogger('stdout').setLevel(logging.INFO)
+    logging.getLogger('stdout').propagate = False
 
 
-def _run(args, debug=False, **subprocess_args):
+class Logger(object):
+    def __init__(self):
+        pass
+
+    def __getattr__(self, name):
+        try:
+            # extract caller method name
+            logger_name = traceback.extract_stack()[-2][2]
+        except:
+            logger_name = "none"
+        return getattr(logging.getLogger(logger_name), name)
+
+
+stdout = logging.getLogger('stdout')
+logger = Logger()
+
+
+def _run(args, **subprocess_args):
     """Run a command, with stdout and stderr connected to the current terminal.
-    Log command if debug=True.
     """
+    # python2.6: isEnabledFor not available
+    debug = logging.root.getEffectiveLevel() == logging.DEBUG
     if debug:
-        # print command
-        # python2.6: index is mandatory
         command = ' '.join([pipes.quote(i) for i in args])
-        print('[cmd] {0}'.format(command), file=sys.stderr)
+        logger.debug(command)
         env = subprocess_args.get('env', None)
         if env:
             # print current environment
-            # python2.6: index is mandatory
-            env_str = ' '.join(['{0}={1}'.format(k, pipes.quote(v))
+            env_str = ' '.join(['%s=%s' % (k, pipes.quote(v))
                                 for k, v in env.items()])
-            print('[cmd] env:{0}'.format(env_str), file=sys.stderr)
+            logger.debug('env:%s', env_str)
     # call command
     subprocess.check_call(args, **subprocess_args)
 
 
-def _download(url, debug=False, _tmpdir=None):
+def _download(url, _tmpdir=None):
     """Download a file and return tuple of (fd, abspath).
     Caller is responsible for deleting file.
     Exception if download cannot be performed.
@@ -114,21 +146,20 @@ def _download(url, debug=False, _tmpdir=None):
     (handle, abspath) = tempfile.mkstemp(prefix='bootstrap', suffix='.sh',
                                          dir=_tmpdir)
     os.close(handle)
+    # python2.6: isEnabledFor not available
+    debug = logger.getEffectiveLevel() == logging.DEBUG
     try:
         args = ['curl', '-v' if debug else None, '-o', abspath, url]
         args = [i for i in args if i]
-        _run(args, debug=debug)
+        _run(args)
     except Exception as e:
         if not debug:
             try:
                 os.remove(abspath)
             except Exception:
-                # python2.6: index is mandatory
-                print('[ERROR] Failing to delete {0}'.format(abspath),
-                      file=sys.stderr)
+                logger.error('Failing to delete %s', abspath)
         else:
-            # python2.6: index is mandatory
-            print('[DEBUG] Keeping file {}'.format(abspath), file=sys.stderr)
+            logger.debug('Keeping file %s', abspath)
         raise Exception('Failed to download {0}. {1}'.format(url, str(e)))
     return (handle, abspath)
 
@@ -148,29 +179,21 @@ def _prepare_conda(prefix, reset_conda):
     prefix_parent = os.path.dirname(prefix)
     if not os.path.exists(prefix_parent):
         try:
-            # python2.6: index is mandatory
-            print("[INFO] Creating directory {0}".format(prefix_parent),
-                  file=sys.stderr)
+            logger.info("Creating directory %s", prefix_parent)
             os.makedirs(prefix_parent)
         except Exception:
-            # python2.6: index is mandatory
-            raise Exception("Error creating {0}".format(prefix_parent))
+            raise Exception("Error creating %s" % (prefix_parent,))
     if reset_conda:
         if os.path.exists(prefix):
-            # python2.6: index is mandatory
-            print("[INFO] Destroying existing env {0}".format(prefix),
-                  file=sys.stderr)
+            logger.info("Destroying existing env %s", prefix)
             shutil.rmtree(prefix)
 
 
 def _skip_env_install(environment):
     """Check file 'environment'; return None if file does not exist."""
     if not os.path.exists(environment):
-        # python2.6: index is mandatory
-        print(("[WARN] Environment file {0} missing; env will be created " +
-               "but install will be skipped")
-              .format(environment),
-              file=sys.stderr)
+        logger.warning("Environment file %s missing; env will be created " +
+               "but install will be skipped", environment)
         return None
     return environment
 
@@ -178,10 +201,8 @@ def _skip_env_install(environment):
 def _skip_miniconda(prefix):
     """Return true if miniconda env located in 'prefix' already exists."""
     if os.path.exists(prefix):
-        # python2.6: index is mandatory
-        print(("[INFO] {0} already exists; use --reset-conda to destroy " +
-               "and recreate it.").format(prefix),
-              file=sys.stderr)
+        logger.info("%s already exists; use --reset-conda to destroy " +
+               "and recreate it.", prefix)
         return True
     return False
 
@@ -198,7 +219,7 @@ def _subprocess_capture(*args, **kwargs):
         pass
 
 
-def _env_exists(prefix, name, debug=False):
+def _env_exists(prefix, name):
     """Check if environment named 'name' exists."""
     env_exists = False
     output = None
@@ -206,11 +227,11 @@ def _env_exists(prefix, name, debug=False):
     returncode, output = _subprocess_capture(
         _command(prefix, 'conda', 'list', '-n', name))
     if returncode != 0:
+        # python2.6: isEnabledFor not available
+        debug = logger.getEffectiveLevel() == logging.DEBUG
         if debug:
-            # python2.6: index is mandatory
-            print("[DEBUG] Trigger {0} creation as conda list failed: {1}"
-                  .format(name, output),
-                  file=sys.stderr)
+            logger.debug("Trigger %s creation as conda list failed: %s",
+                         name, output)
     else:
         env_exists = True
     return env_exists
@@ -218,40 +239,34 @@ def _env_exists(prefix, name, debug=False):
 
 def _env_remove(prefix, name):
     """Remove an existing conda environment named 'name'."""
-    # python2.6: index is mandatory
-    print("[INFO] Removing {0} ".format(name), file=sys.stderr)
+    logger.info("Removing %s", name)
     returncode, output = _subprocess_capture(
         _command(prefix, 'conda',
                  'env', 'remove', '-n', name, '-y'))
     if returncode != 0:
-        # python2.6: index is mandatory
-        raise Exception("[FATAL] Error removing {0}: {1}"
-                        .format(name, output))
+        raise Exception("[FATAL] Error removing %s: %s" %
+                        (name, output))
 
 
 def _env_create(prefix, name):
     """Create a new Conda environment named 'name'."""
-    # python2.6: index is mandatory
-    print("[INFO] Creating {0} ".format(name), file=sys.stderr)
+    logger.info("Creating %s", name)
     returncode, output = _subprocess_capture(
         _command(prefix, 'conda', 'create', '-n', name, '-y'))
     if returncode != 0:
-        # python2.6: index is mandatory
-        raise Exception("[FATAL] Error creating {0}: {1}"
-                        .format(name, output))
+        raise Exception("[FATAL] Error creating %s: %s" %
+                        (name, output))
 
 
 def _env_install(prefix, name, environment):
     """Use a environment.yml file to initialize 'name' environment."""
-    # python2.6: index is mandatory
-    print("[INFO] Installing {0} ".format(name), file=sys.stderr)
+    logger.info("Installing %s", name)
     returncode, output = _subprocess_capture(
         _command(prefix, 'conda', 'env', 'update', '-n', name,
                  '--file', environment))
     if returncode != 0:
-        # python2.6: index is mandatory
-        raise Exception("[FATAL] Error installing {0}: {1}"
-                        .format(name, output))
+        raise Exception("[FATAL] Error installing %s: %s" %
+                        (name, output))
 
 
 def _handle_env(prefix, name, environment, reset_env):
@@ -261,10 +276,8 @@ def _handle_env(prefix, name, environment, reset_env):
         _env_remove(prefix, name)
         env_exists = False
     elif env_exists:
-        # python2.6: index is mandatory
-        print(("[INFO] Env {0} already exists; use --reset-env to " +
-               "destroy and recreate it.").format(name),
-              file=sys.stderr)
+        logger.info("Env %s already exists; use --reset-env to " +
+               "destroy and recreate it.", name)
 
     if not env_exists:
         _env_create(prefix, name)
@@ -277,9 +290,7 @@ def _handle_bootstrap_command(prefix, name):
     """Run BOOTSTRAP_COMMAND in the Conda environment prefix:name."""
     command = os.getenv(ENV_BOOTSTRAP_COMMAND, None)
     if command is not None:
-        # python2.6: index is mandatory
-        print("[INFO] Running in env {1} > {0}".format(command, name),
-              file=sys.stderr)
+        logger.info("Running in env %s > %s", name, command)
         activate_conda = ['.', os.path.join(prefix, 'bin/activate')]
         activate_env = ['conda', 'activate', pipes.quote(name)]
         whole_command = ' '.join(activate_conda +
@@ -287,12 +298,11 @@ def _handle_bootstrap_command(prefix, name):
                                  ['&&'] + [command])
         returncode, output = _subprocess_capture(whole_command, shell=True)
         if returncode != 0:
-            # python2.6: index is mandatory
-            raise Exception("[FATAL] Error running {0}: {1}"
-                            .format(command, output))
+            raise Exception("[FATAL] Error running %s: %s" %
+                            (command, output))
 
 
-def _miniconda_install(prefix, debug=False, removals=None):
+def _miniconda_install(prefix, removals=None):
     """Download and install miniconda in prefix, append downloaded file
     in removals if list is initialized"""
     # Conda's python needs libcrypt.so.1 that needs libxcrypt.so.1
@@ -303,14 +313,13 @@ fi
 """
     subprocess.check_call(script, shell=True)
     # Download Miniconda
-    (_, miniconda_script) = _download(MINICONDA_INSTALLER_URL,
-                                      debug=debug)
+    (_, miniconda_script) = _download(MINICONDA_INSTALLER_URL)
     if removals is not None:
         removals.append(miniconda_script)
     # Run Miniconda
     miniconda_args = ['/bin/bash', miniconda_script,
                       '-u', '-b', '-p', prefix]
-    _run(miniconda_args, debug=debug)
+    _run(miniconda_args)
 
 
 #: .format(bootstrap_d_path) ; activate script
@@ -396,9 +405,8 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
             with io.open(activate_path, 'w', encoding='utf-8') as f:
                 f.write(activate_script)
         except Exception as e:
-            print("[ERROR] activate script creation fails: {0}".format(e))
-    # python2.6: index is mandatory
-    print("[INFO] Env {0} initialized.".format(prefix), file=sys.stderr)
+            logger.error("activate script creation fails: %s".format(e))
+    logger.info("Env %s initialized.", prefix)
     bootstrap_activate_enabled = False
     bootstrap_activate_loadable = False
     if skip_activate_script or activate_script_fails:
@@ -413,9 +421,8 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
                 bootstrap_activate_loadable = (
                     subprocess.check_output(check_command) == '1')
             except Exception as e:
-                print('[WARN ] Error checking if bootstrap.conf is sourced. '
-                      'Assuming it is not sourced.',
-                      file=sys.stderr)
+                logger.warning('Error checking if bootstrap.conf is sourced. '
+                      'Assuming it is not sourced.')
     activate_command = None
     if bootstrap_activate_enabled:
         activate_command = 'bootstrap-activate {0}'.format(pipes.quote(name))
@@ -431,34 +438,32 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
         )
         deactivate_command = 'conda deactivate; conda deactivate'
     # print activation command-line
-    print(("[INFO] Run this command to load/unload your env:\n\n" +
+    stdout.info("Run this command to load/unload your env:\n\n" +
          "# Activate environment\n" +
-         "{0}\n" +
+         "%s\n" +
          "# Deactivate environment\n" +
-         "{1}\n"
-         "\n")
-        .format(activate_command, deactivate_command),
-        file=sys.stderr)
+         "%s\n"
+         "\n", activate_command, deactivate_command)
 
 
 def _bootstrap(prefix, name, environment, args,
                reset_conda=False, reset_env=False,
                profile_dir='', skip_activate_script=False,
-               debug=False):
+               verbose=0):
     """Delete existing Miniconda if reset_conda=True.
-    Print verbose output (stderr of commands and debug messages) if debug=True.
+    Print verbose output (stderr of commands and debug messages) if verbose > 1.
     """
+    debug = verbose > 1
+    logging.root.setLevel(logging.DEBUG if debug else logging.INFO)
     name = _fix_bootstrap_name(name, warn=True)
     # handle ~/ paths
     prefix = os.path.expanduser(prefix)
     environment = os.path.expanduser(environment)
 
     # some logging
-    # python2.6: index is mandatory
-    mainLogger = logging.getLogger('main')
-    mainLogger.info("Using {0} as conda prefix".format(prefix))
-    mainLogger.info("Using {0} as environment name".format(name))
-    mainLogger.info("Using {0} as environment file".format(environment))
+    logger.info("Using %s as conda prefix", prefix)
+    logger.info("Using %s as environment name", name)
+    logger.info("Using %s as environment file", environment)
 
     environment = _skip_env_install(environment)
     # prepare parent folders, reset conda if asked to
@@ -470,7 +475,7 @@ def _bootstrap(prefix, name, environment, args,
         # Conda installation
         tmp_removals = []
         if not skip_miniconda:
-            _miniconda_install(prefix, debug=debug, removals=tmp_removals)
+            _miniconda_install(prefix, removals=tmp_removals)
 
         # Conda env reset, creation and initialization
         _handle_env(prefix, name, environment, reset_env)
@@ -479,7 +484,7 @@ def _bootstrap(prefix, name, environment, args,
         # Print commands to activate Miniconda env
         _print_activate_command(prefix, name, profile_dir, skip_activate_script)
         if args:
-            print('[INFO] Use remaining args as command: {0}'.format(' '.join(args)))
+            logger.info('Use remaining args as command: %s', ' '.join(args))
             # Launch command
             while args[0] == '--':
                 args = args[1:]
@@ -499,24 +504,20 @@ def _bootstrap(prefix, name, environment, args,
                 *args[1:]                           # args
             ), env=env)
     except Exception as e:
-        # python2.6: index is mandatory
-        print('[ERROR] Bootstrap failure: {0}'.format(str(e)), file=sys.stderr)
+        logger.error('Bootstrap failure: %s', str(e))
+        # python2.6: isEnabledFor not available
+        debug = logger.getEffectiveLevel() == logging.DEBUG
         if not debug:
             if tmp_removals:
                 for tmp_removal in tmp_removals:
                     try:
                         os.remove(tmp_removal)
                     except Exception:
-                        # python2.6: index is mandatory
-                        print('[ERROR] Failing to delete {0}'
-                              .format(tmp_removal),
-                              file=sys.stderr)
+                        logger.error('Failing to delete %s', tmp_removal)
         else:
             if tmp_removals:
                 for tmp_removal in tmp_removals:
-                    # python2.6: index is mandatory
-                    print('[DEBUG] Keeping file {0}'.format(tmp_removal),
-                          file=sys.stderr)
+                    logger.debug('Keeping file %s', tmp_removal)
 
 
 def _default_bootstrap_name(bootstrap_path):
@@ -539,8 +540,8 @@ def _fix_bootstrap_name(bootstrap_name, warn=False):
     bootstrap_name_sub = re.sub(r"[^0-9a-zA-Z-]", "_", bootstrap_name)
     if bootstrap_name != bootstrap_name_sub:
         if warn:
-            print("[WARN] Environment renamed {0} from {1} to remove special"
-                  " characters".format(bootstrap_name_sub, bootstrap_name))
+            logger.warning("Environment renamed %s from %s to remove special"
+                  " characters", bootstrap_name_sub, bootstrap_name)
         bootstrap_name = bootstrap_name_sub
     return bootstrap_name
 
@@ -577,9 +578,8 @@ def _parser():
     cmd.add_argument('--reset-env',
                      dest='reset_env', action='store_true', default=False,
                      help='Delete existing conda environment.')
-    cmd.add_argument('--debug',
-                     dest='debug', action='store_true', default=False,
-                     help='Activate debug output.')
+    cmd.add_argument('-v', '--verbose', dest='verbose', action='count', default=0,
+                     help='Enable verbose output')
     cmd.add_argument('--prefix',
                      dest='prefix', default=default_conda_prefix,
                      help='Prefix for conda environment.')

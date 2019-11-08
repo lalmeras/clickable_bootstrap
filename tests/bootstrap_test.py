@@ -2,6 +2,7 @@
 # -*- encoding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4 expandtab ai
 
+import logging
 import os
 import py
 import pytest
@@ -9,9 +10,17 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 
 from mock import patch
 from shellescape import quote
+
+try:
+    from collections import OrderedDict
+except ImportError:
+    # Python 2.6
+    from ordereddict import OrderedDict
+
 
 class EnvOverrides(object):
     """This class allows to register environment modification so that it
@@ -74,64 +83,67 @@ def _err(capture):
     except:
         return capture[1]
 
-def test_run_standard(capfd):
+def test_run_standard(capfd, caplog):
     """Run a command, no extra args (success)"""
     from bootstrap import _run
     args = ['echo', '-n', 'hello', 'world']
     _run(args)
     captured = capfd.readouterr()
     assert 'hello world' == _out(captured)
+    assert len(caplog.records) == 0
 
-def test_run_stderr(capfd):
+def test_run_stderr(capfd, caplog):
     """Run a command with output on stderr (success)"""
     from bootstrap import _run
     args = ' '.join(['>&2', 'echo', '-n', 'hello', 'world'])
     _run(args, shell=True)
     captured = capfd.readouterr()
     assert 'hello world' == _err(captured)
+    assert len(caplog.records) == 0
 
-def test_run_env(capfd):
+def test_run_env(capfd, caplog):
     """Run a command that print a var from environment"""
     from bootstrap import _run
     args = ['printenv', 'TEST']
     _run(args, env={'TEST': 'VALUE'})
     captured = capfd.readouterr()
     assert 'VALUE\n' == _out(captured)
+    assert len(caplog.records) == 0
 
-def test_run_debug(capfd):
+def test_run_debug(capfd, caplog):
     """Debug a command"""
     from bootstrap import _run
     args = ['echo', '-n', 'hello', 'world']
-    debug = True
-    _run(args, debug=debug)
+    logging.root.setLevel(logging.DEBUG)
+    _run(args)
+    records = caplog.records
     captured = capfd.readouterr()
-    assert '[cmd] echo -n hello world\n' == _err(captured)
+    assert 'echo -n hello world' == records[0].message
     assert 'hello world' == _out(captured)
+    assert len(records) == 1
 
-def test_run_debug_env(capfd):
+def test_run_debug_env(capfd, caplog):
     """Debug a command"""
     from bootstrap import _run
     args = ['echo', '-n', 'hello', 'world']
-    debug = True
     import collections
     # use an ordered dict so that debug output is deterministic
     values = [['TEST1', 'VALUE1'], ['TEST2', 'VALUE2']]
-    try:
-        env = collections.OrderedDict(values)
-    except AttributeError:
-        # Python 2.6
-        import ordereddict
-        env = ordereddict.OrderedDict(values)
-    _run(args, debug=debug, env=env)
+    env = OrderedDict(values)
+    logging.root.setLevel(logging.DEBUG)
+    _run(args, env=env)
+    records = caplog.records
     captured = capfd.readouterr()
-    assert '[cmd] echo -n hello world\n' \
-            + '[cmd] env:TEST1=VALUE1 TEST2=VALUE2\n' == _err(captured)
+    assert 'echo -n hello world' == records[0].message
+    assert 'env:TEST1=VALUE1 TEST2=VALUE2' == records[1].message
     assert 'hello world' == _out(captured)
+    assert len(records) == 2
 
-def test_download_success(capfd, tmpdir):
+def test_download_success(capfd, caplog, tmpdir):
     """check that download can be done, and the location of
     provided file"""
     from bootstrap import _download
+    logging.root.setLevel(logging.INFO)
     handle = _download('http://google.fr',
                        _tmpdir=str(tmpdir))
     # check that only one file is created in tempdir 
@@ -141,10 +153,12 @@ def test_download_success(capfd, tmpdir):
     captured = capfd.readouterr()
     #assert '' == _err(captured) #curl is verbose
     assert '' == _out(captured)
+    assert len(caplog.records) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_download_error(capfd, tmpdir):
+def test_download_error(capfd, caplog, tmpdir):
     from bootstrap import _download
+    logging.root.setLevel(logging.INFO)
     def f():
         _download('http://notexistingdomain.not',
                   _tmpdir=str(tmpdir))
@@ -154,6 +168,8 @@ def test_download_error(capfd, tmpdir):
     captured = capfd.readouterr()
     #assert '' == _err(captured) #curl is verbose
     assert '' == _out(captured)
+    records = caplog.records
+    assert len(records) == 0
     shutil.rmtree(str(tmpdir))
 
 def test_command():
@@ -161,7 +177,7 @@ def test_command():
     assert ['/prefix/bin/command', 'param1', 'param2'] == \
             _command('/prefix', 'command', 'param1', 'param2')
 
-def test_prepare_conda_not_existing(capfd, tmpdir):
+def test_prepare_conda_not_existing(caplog, tmpdir):
     """If provided prefix is not existing, but parent of prefix exists,
     then nothing is done (prefix does not exist and parent directory is
     untouched)."""
@@ -170,12 +186,10 @@ def test_prepare_conda_not_existing(capfd, tmpdir):
     assert not conda.exists()
     _prepare_conda(str(conda), False)
     assert not conda.exists()
-    captured = capfd.readouterr()
-    assert '' == _err(captured)
-    assert '' == _out(captured)
+    assert len(caplog.records) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_prepare_conda_existing(capfd, tmpdir):
+def test_prepare_conda_existing(caplog, tmpdir):
     """If provided prefix exists, nothhing is done (prefix does not exist
     and parent directory is untouched)."""
     from bootstrap import _prepare_conda
@@ -183,12 +197,10 @@ def test_prepare_conda_existing(capfd, tmpdir):
     _prepare_conda(str(conda), False)
     assert conda.exists()
     assert conda.isdir()
-    captured = capfd.readouterr()
-    assert '' == _err(captured)
-    assert '' == _out(captured)
+    assert len(caplog.records) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_prepare_conda_subdir(capfd, tmpdir):
+def test_prepare_conda_subdir(caplog, tmpdir):
     """If prefix' parent directory does not exist, it is created. Prefix
     is not created."""
     from bootstrap import _prepare_conda
@@ -196,23 +208,23 @@ def test_prepare_conda_subdir(capfd, tmpdir):
     _prepare_conda(str(conda), False)
     assert not conda.exists()
     assert conda.join('/..').isdir()
-    captured = capfd.readouterr()
-    assert '[INFO] Creating directory {0}\n'.format(str(conda.join('/..'))) == _err(captured)
-    assert '' == _out(captured)
+    records = caplog.records
+    assert 'Creating directory {0}'.format(str(conda.join('/..'))) == records[0].message
+    assert len([i for i in records if i.name == 'stdout']) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_prepare_conda_reset_existing(capfd, tmpdir):
+def test_prepare_conda_reset_existing(caplog, tmpdir):
     """If existing conda prefix exists and reset=True, it is deleted."""
     from bootstrap import _prepare_conda
     conda = tmpdir.join('conda').mkdir()
     _prepare_conda(str(conda), True)
     assert not conda.exists() and conda.join('/..').exists()
-    captured = capfd.readouterr()
-    assert '[INFO] Destroying existing env {0}\n'.format(str(conda)) == _err(captured)
-    assert '' == _out(captured)
+    records = caplog.records
+    assert 'Destroying existing env {0}'.format(str(conda)) == records[0].message
+    assert len([i for i in records if i.name == 'stdout']) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_prepare_conda_reset_invalid(capfd, tmpdir):
+def test_prepare_conda_reset_invalid(caplog, tmpdir):
     """If existing conda prefix exists and reset=True, but cannot be deleted,
     an exception is raised."""
     from bootstrap import _prepare_conda
@@ -222,13 +234,13 @@ def test_prepare_conda_reset_invalid(capfd, tmpdir):
     def f():
         _prepare_conda(str(conda), True)
     pytest.raises(Exception, f)
-    captured = capfd.readouterr()
-    assert '[INFO] Destroying existing env {0}\n'.format(str(conda)) == _err(captured)
-    assert '' == _out(captured)
+    records = caplog.records
+    assert 'Destroying existing env {0}'.format(str(conda)) == records[0].message
+    assert len([i for i in records if i.name == 'stdout']) == 0
     os.chmod(str(tmpdir), stat.S_IWUSR | stat.S_IRUSR | stat.S_IXUSR)
     shutil.rmtree(str(tmpdir))
 
-def test_prepare_conda_parent_invalid(capfd, tmpdir):
+def test_prepare_conda_parent_invalid(caplog, tmpdir):
     """If existing conda prefix and parent does not exist, but cannot be
     deleted, an exception is raised."""
     from bootstrap import _prepare_conda
@@ -240,234 +252,217 @@ def test_prepare_conda_parent_invalid(capfd, tmpdir):
     assert not conda.exists()
     assert not conda.join('/..').exists()
     assert tmpdir.exists()
-    captured = capfd.readouterr()
-    assert '[INFO] Creating directory {0}\n'.format(str(conda.join('/..'))) == _err(captured)
-    assert '' == _out(captured)
+    records = caplog.records
+    assert 'Creating directory {0}'.format(str(conda.join('/..'))) == records[0].message
+    assert len([i for i in records if i.name == 'stdout']) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_skip_env_install_skip(capfd, tmpdir):
+def test_skip_env_install_skip(caplog, tmpdir):
     """If no environment file, install is skipped"""
     from bootstrap import _skip_env_install
     env = tmpdir.join('environment')
     assert None == _skip_env_install(str(env))
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('Environment file .* missing', _err(captured))
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('Environment file .* missing', records[0].message)
     shutil.rmtree(str(tmpdir))
 
-def test_skip_env_install_not_skip(capfd, tmpdir):
+def test_skip_env_install_not_skip(caplog, tmpdir):
     """If environment file, return file path"""
     from bootstrap import _skip_env_install
     env = tmpdir.join('environment')
     env.ensure(file=True)
     assert str(env) == _skip_env_install(str(env))
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert '' == _err(captured)
+    assert len(caplog.records) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_skip_miniconda_skip(capfd, tmpdir):
+def test_skip_miniconda_skip(caplog, tmpdir):
     """If miniconda prefix exists, return True"""
     from bootstrap import _skip_miniconda
     assert True == _skip_miniconda(str(tmpdir))
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('--reset-conda', _err(captured))
-    assert None != re.search('already exists', _err(captured))
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('--reset-conda', records[0].message)
+    assert None != re.search('already exists', records[0].message)
     shutil.rmtree(str(tmpdir))
 
-def test_skip_miniconda_skip(capfd, tmpdir):
+def test_skip_miniconda_skip(caplog, tmpdir):
     """If miniconda prefix exists, return True"""
     from bootstrap import _skip_miniconda
     prefix = tmpdir.join('prefix')
     assert False == _skip_miniconda(str(prefix))
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert '' == _err(captured)
+    records = caplog.records
+    assert len(records) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_env_exists_yes(capfd, tmpdir):
+def test_env_exists_yes(caplog, tmpdir):
     """If environment is listed by conda, return True"""
     from bootstrap import _env_exists
     conda = tmpdir.join('bin/conda')
     _success_script(conda)
     assert True == _env_exists(str(tmpdir), 'test')
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert '' == _err(captured)
+    records = caplog.records
+    assert len(records) == 0
     shutil.rmtree(str(tmpdir))
 
-def test_env_exists_no(capfd, tmpdir):
+def test_env_exists_no(caplog, tmpdir):
     """If environment is not listed by conda, return False"""
     from bootstrap import _env_exists
     conda = tmpdir.join('bin/conda')
     _error_script(conda)
     assert False == _env_exists(str(tmpdir), 'test')
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert '' == _err(captured)
+    records = caplog.records
     shutil.rmtree(str(tmpdir))
 
-def test_env_exists_no_debug(capfd, tmpdir):
+def test_env_exists_no_debug(caplog, tmpdir):
     """If environment is not listed by conda, return False"""
     from bootstrap import _env_exists
     conda = tmpdir.join('bin/conda')
     _error_script(conda)
-    assert False == _env_exists(str(tmpdir), 'test', debug=True)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('Trigger .* creation', _err(captured))
-    assert None != re.search('error_str', _err(captured))
+    logging.root.setLevel(logging.DEBUG)
+    assert False == _env_exists(str(tmpdir), 'test')
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('Trigger .* creation', records[0].message)
+    assert None != re.search('error_str', records[0].message)
     shutil.rmtree(str(tmpdir))
 
-def test_env_remove_ok(capfd, tmpdir):
+def test_env_remove_ok(caplog, tmpdir):
     from bootstrap import _env_remove
     conda = tmpdir.join('bin/conda')
     _success_script(conda)
     _env_remove(str(tmpdir), 'test')
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('removing', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('removing', records[0].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_env_remove_nok(capfd, tmpdir):
+def test_env_remove_nok(caplog, tmpdir):
     from bootstrap import _env_remove
     conda = tmpdir.join('bin/conda')
     _error_script(conda)
     def f():
         _env_remove(str(tmpdir), 'test')
     e = pytest.raises(Exception, f)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('removing', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('removing', records[0].message, flags=re.I)
     assert None != re.search('error removing', str(e.value), flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_env_create_ok(capfd, tmpdir):
+def test_env_create_ok(caplog, tmpdir):
     from bootstrap import _env_create
     conda = tmpdir.join('bin/conda')
     _success_script(conda)
     _env_create(str(tmpdir), 'test')
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('creating', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('creating', records[0].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_env_create_nok(capfd, tmpdir):
+def test_env_create_nok(caplog, tmpdir):
     from bootstrap import _env_create
     conda = tmpdir.join('bin/conda')
     _error_script(conda)
     def f():
         _env_create(str(tmpdir), 'test')
     e = pytest.raises(Exception, f)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('creating', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('creating', records[0].message, flags=re.I)
     assert None != re.search('error creating', str(e.value), flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_env_install_ok(capfd, tmpdir):
+def test_env_install_ok(caplog, tmpdir):
     from bootstrap import _env_install
     conda = tmpdir.join('bin/conda')
     _success_script(conda)
     _env_install(str(tmpdir), 'test', 'fakearg')
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('installing', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('installing', records[0].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_env_install_nok(capfd, tmpdir):
+def test_env_install_nok(caplog, tmpdir):
     from bootstrap import _env_install
     conda = tmpdir.join('bin/conda')
     _error_script(conda)
     def f():
         _env_install(str(tmpdir), 'test', 'fakearg')
     e = pytest.raises(Exception, f)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('installing', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('installing', records[0].message, flags=re.I)
     assert None != re.search('error installing', str(e.value), flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_handle_env_no_reset(capfd, tmpdir):
+def test_handle_env_no_reset(caplog, tmpdir):
     from bootstrap import _handle_env
     conda = tmpdir.join('bin/conda')
     _fake_conda_script(conda, 0, 1, 0, 0)
     _handle_env(str(tmpdir), 'test', 'fakearg', False)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None == re.search('removing', _err(captured), flags=re.I)
-    assert None == re.search('--reset-env', _err(captured), flags=re.I)
-    assert None != re.search('creating', _err(captured), flags=re.I)
-    assert None != re.search('installing', _err(captured), flags=re.I)
+    records = caplog.records
+    records = [r for r in caplog.records if r.levelno > logging.DEBUG]
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None == re.search('removing', records[0].message, flags=re.I)
+    assert None == re.search('--reset-env', records[0].message, flags=re.I)
+    assert None != re.search('creating', records[0].message, flags=re.I)
+    assert None != re.search('installing', records[1].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_handle_env_reset(capfd, tmpdir):
+def test_handle_env_reset(caplog, tmpdir):
     from bootstrap import _handle_env
     conda = tmpdir.join('bin/conda')
     _fake_conda_script(conda, 0, 0, 0, 0)
     _handle_env(str(tmpdir), 'test', 'fakearg', True)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('removing', _err(captured), flags=re.I)
-    assert None == re.search('--reset-env', _err(captured), flags=re.I)
-    assert None != re.search('creating', _err(captured), flags=re.I)
-    assert None != re.search('installing', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('removing', records[0].message, flags=re.I)
+    assert None == re.search('--reset-env', records[1].message, flags=re.I)
+    assert None != re.search('creating', records[1].message, flags=re.I)
+    assert None != re.search('installing', records[2].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_handle_env_exists(capfd, tmpdir):
+def test_handle_env_exists(caplog, tmpdir):
     from bootstrap import _handle_env
     conda = tmpdir.join('bin/conda')
     _fake_conda_script(conda, 0, 0, 0, 0)
     _handle_env(str(tmpdir), 'test', 'fakearg', False)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None == re.search('removing', _err(captured), flags=re.I)
-    assert None != re.search('--reset-env', _err(captured), flags=re.I)
-    assert None == re.search('creating', _err(captured), flags=re.I)
-    assert None != re.search('installing', _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None == re.search('removing', records[0].message, flags=re.I)
+    assert None != re.search('--reset-env', records[0].message, flags=re.I)
+    assert None == re.search('creating', records[1].message, flags=re.I)
+    assert None != re.search('installing', records[1].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_handle_env_no_environment_file(capfd, tmpdir):
+def test_handle_env_no_environment_file(caplog, tmpdir):
     from bootstrap import _handle_env
     conda = tmpdir.join('bin/conda')
     _fake_conda_script(conda, 0, 1, 0, 0)
     _handle_env(str(tmpdir), 'test', None, False)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None == re.search('removing', _err(captured), flags=re.I)
-    assert None == re.search('--reset-env', _err(captured), flags=re.I)
-    assert None != re.search('creating', _err(captured), flags=re.I)
-    assert None == re.search('installing', _err(captured), flags=re.I)
+    records = [r for r in caplog.records if r.levelno > logging.DEBUG]
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None == re.search('removing', records[0].message, flags=re.I)
+    assert None == re.search('--reset-env', records[0].message, flags=re.I)
+    assert None != re.search('creating', records[0].message, flags=re.I)
+    assert None == re.search('installing', records[0].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_handle_env_no_environment_file(capfd, tmpdir):
-    from bootstrap import _handle_env
-    conda = tmpdir.join('bin/conda')
-    _fake_conda_script(conda, 0, 1, 0, 0)
-    _handle_env(str(tmpdir), 'test', None, False)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None == re.search('removing', _err(captured), flags=re.I)
-    assert None == re.search('--reset-env', _err(captured), flags=re.I)
-    assert None != re.search('creating', _err(captured), flags=re.I)
-    assert None == re.search('installing', _err(captured), flags=re.I)
-    shutil.rmtree(str(tmpdir))
-
-def test_handle_bootstrap_command(capfd, tmpdir, environment):
+def test_handle_bootstrap_command(caplog, tmpdir, environment):
     from bootstrap import _handle_bootstrap_command
     command = 'echo bootstrap'
     environment['BOOTSTRAP_COMMAND'] = command
     activate = tmpdir.join('bin/activate')
     _fake_activate_script(activate)
     _handle_bootstrap_command(str(tmpdir), 'test')
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('running', _err(captured), flags=re.I)
-    assert None != re.search(command, _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('running', records[0].message, flags=re.I)
+    assert None != re.search(command, records[0].message, flags=re.I)
     shutil.rmtree(str(tmpdir))
 
-def test_handle_bootstrap_command_ko(capfd, tmpdir, environment):
+def test_handle_bootstrap_command_ko(caplog, tmpdir, environment):
     from bootstrap import _handle_bootstrap_command
     command = 'false'
     environment['BOOTSTRAP_COMMAND'] = command
@@ -476,16 +471,16 @@ def test_handle_bootstrap_command_ko(capfd, tmpdir, environment):
     def f():
         _handle_bootstrap_command(str(tmpdir), 'test')
     e = pytest.raises(Exception, f)
-    captured = capfd.readouterr()
-    assert '' == _out(captured)
-    assert None != re.search('running', _err(captured), flags=re.I)
-    assert None != re.search(command, _err(captured), flags=re.I)
+    records = caplog.records
+    assert len([i for i in records if i.name == 'stdout']) == 0
+    assert None != re.search('running', records[0].message, flags=re.I)
+    assert None != re.search(command, records[0].message, flags=re.I)
     assert None != re.search('error running', str(e.value), flags=re.I)
     shutil.rmtree(str(tmpdir))
 
 @patch('bootstrap._run')
 @patch('bootstrap._download')
-def test_miniconda_install(download, run, capfd, tmpdir, environment):
+def test_miniconda_install(download, run, capfd, caplog, tmpdir, environment):
     """Miniconda install; download is mocked to return a fake success script"""
     import bootstrap
     from bootstrap import _miniconda_install
@@ -493,16 +488,15 @@ def test_miniconda_install(download, run, capfd, tmpdir, environment):
     _success_script(miniconda_fake)
     download.return_value = (None, str(miniconda_fake))
     removals = []
-    _miniconda_install(str(tmpdir), debug=False, removals=removals)
+    _miniconda_install(str(tmpdir), removals=removals)
     captured = capfd.readouterr()
     # install script is flag for removal
     assert str(miniconda_fake) in removals
-    download.assert_called_with(bootstrap.MINICONDA_INSTALLER_URL, debug=False)
+    download.assert_called_with(bootstrap.MINICONDA_INSTALLER_URL)
     # no direct output
     # (output is either from download - mocked -
     # or miniconda install script - replaced with a fake script, and not run)
-    assert '' == _out(captured)
-    assert '' == _err(captured)
+    assert len(caplog.records) == 0
     shutil.rmtree(str(tmpdir))
 
 def test_bootstrap_activate(capfd, tmpdir):
@@ -555,7 +549,7 @@ def test_fix_bootstrap_name():
     assert 'env_name' == _fix_bootstrap_name('env,name')
     assert 'env_name' == _fix_bootstrap_name('env name')
 
-def test_print_activate_command(capfd, tmpdir):
+def test_print_activate_command(caplog, tmpdir):
     """Check env activation command"""
     from bootstrap import _print_activate_command
     bootstrap_conf_path = tmpdir.join('bootstrap.conf')
@@ -563,16 +557,17 @@ def test_print_activate_command(capfd, tmpdir):
                             False)
     assert tmpdir.join('bootstrap.conf.d').isdir()
     assert tmpdir.join('bootstrap.conf.d').join('activate-env-name.conf').isfile()
-    captured = capfd.readouterr()
+    records = caplog.records
     assert None != re.search('source {0}'.format(str(bootstrap_conf_path)),
-                             _err(captured))
+                             records[0].message)
     assert None != re.search('bootstrap-activate {0}'.format('env-name'),
-                             _err(captured))
+                             records[0].message)
     assert None != re.search('bootstrap-deactivate'.format('env-name'),
-                             _err(captured))
+                             records[0].message)
+    assert len([i for i in records if i.name == 'stdout']) == 1
     shutil.rmtree(str(tmpdir))
 
-def test_print_activate_command(capfd, tmpdir, environment):
+def test_print_activate_command(caplog, tmpdir, environment):
     """Check env activation command if bootstrap is detected as loaded"""
     environment['BOOTSTRAP_ACTIVATE'] = '1'
     from bootstrap import _print_activate_command
@@ -581,16 +576,17 @@ def test_print_activate_command(capfd, tmpdir, environment):
                             False)
     assert tmpdir.join('bootstrap.conf.d').isdir()
     assert tmpdir.join('bootstrap.conf.d').join('activate-env-name.conf').isfile()
-    captured = capfd.readouterr()
+    records = caplog.records
     assert None == re.search('source {0}'.format(str(bootstrap_conf_path)),
-                             _err(captured))
+                             records[1].message)
     assert None != re.search('bootstrap-activate {0}'.format('env-name'),
-                             _err(captured))
+                             records[1].message)
     assert None != re.search('bootstrap-deactivate'.format('env-name'),
-                             _err(captured))
+                             records[1].message)
+    assert len([i for i in records if i.name == 'stdout']) == 1
     shutil.rmtree(str(tmpdir))
 
-def test_print_activate_command_conda(capfd, tmpdir):
+def test_print_activate_command_conda(caplog, tmpdir):
     """Check env activation command if bootstrap scripts are skipped"""
     from bootstrap import _print_activate_command
     bootstrap_conf_path = tmpdir.join('bootstrap.conf')
@@ -598,15 +594,16 @@ def test_print_activate_command_conda(capfd, tmpdir):
                             True)
     assert not tmpdir.join('bootstrap.conf.d').isdir()
     assert not tmpdir.join('bootstrap.conf.d').join('activate-env-name.conf').isfile()
-    captured = capfd.readouterr()
+    records = caplog.records
     assert None == re.search(str(bootstrap_conf_path),
-                             _err(captured))
+                             records[1].message)
     assert None != re.search(str(tmpdir.join('bin/activate')),
-                             _err(captured))
+                             records[1].message)
     assert None != re.search('conda activate {0}'.format('env-name'),
-                             _err(captured))
+                             records[1].message)
     assert None != re.search('conda deactivate'.format('env-name'),
-                             _err(captured))
+                             records[1].message)
+    assert len([i for i in records if i.name == 'stdout']) == 1
     shutil.rmtree(str(tmpdir))
 
 def test_parser_env_bootstrap_path(environment, tmpdir):
@@ -639,7 +636,6 @@ def test_parser_defaults():
     args = p.parse_args([])
     assert False == vars(args)['reset_conda']
     assert False == vars(args)['reset_env']
-    assert False == vars(args)['debug']
     assert '~/.miniconda2' == vars(args)['prefix']
     assert '~/.profile.d/bootstrap.conf' == vars(args)['profile_dir']
     assert False == vars(args)['skip_activate_script']
