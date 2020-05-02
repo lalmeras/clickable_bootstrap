@@ -149,7 +149,8 @@ def _download(url, _tmpdir=None):
     # python2.6: isEnabledFor not available
     debug = logger.getEffectiveLevel() == logging.DEBUG
     try:
-        args = ['curl', '-v' if debug else None, '-o', abspath, url]
+        # -L follow redirect
+        args = ['curl', '-L', '-v' if debug else None, '-o', abspath, url]
         args = [i for i in args if i]
         _run(args)
     except Exception as e:
