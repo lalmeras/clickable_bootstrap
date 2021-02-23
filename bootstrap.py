@@ -291,6 +291,13 @@ def _handle_bootstrap_command(prefix, name):
     """Run BOOTSTRAP_COMMAND in the Conda environment prefix:name."""
     command = os.getenv(ENV_BOOTSTRAP_COMMAND, None)
     if command is not None:
+        # python2.6: index is mandatory
+        # https://github.com/python-poetry/poetry/issues/3663
+        # poetry -vv fails ! generic ugly fix here !
+        if '-vvv' in command or '-vv' in command:
+            command = command.replace('-vvv', '-v')
+            command = command.replace('-vv', '-v')
+            logger.info("[INFO] Replacing -vv[v] by -v https://github.com/python-poetry/poetry/issues/3663")
         logger.info("Running in env %s > %s", name, command)
         activate_conda = ['.', os.path.join(prefix, 'bin/activate')]
         activate_env = ['conda', 'activate', pipes.quote(name)]
