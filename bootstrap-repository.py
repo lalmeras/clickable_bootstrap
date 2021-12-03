@@ -71,7 +71,7 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
                                 .format(pipenv_not_found))
             if reset_pipenv:
                 print('[INFO] Cleaning pipenv', file=sys.stderr)
-                if subprocess.call(['pipenv', '--venv'], cwd=target_path) != 0:
+                if subprocess.call(['pipenv', '--venv'], cwd=target_path) == 0:
                     subprocess.check_call(['pipenv', '--rm'], cwd=target_path)
                 if os.path.exists(os.path.join(target_path, 'Pipfile.lock')):
                     os.remove(os.path.join(target_path, 'Pipfile.lock'))
