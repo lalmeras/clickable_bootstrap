@@ -57,7 +57,9 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
             subprocess.check_call(_command(git_command, 'clone', git_url, target_path))
         print('[INFO] Switching/refreshing reference {0}.'.format(ref), file=sys.stderr)
         subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
+        subprocess.check_call(_command(git_command, 'clean', '-df'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'checkout', ref), cwd=target_path)
+        subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'submodule', 'update', '--init'),
                               cwd=target_path)
         if os.path.exists(os.path.join(target_path, 'Pipfile')):
