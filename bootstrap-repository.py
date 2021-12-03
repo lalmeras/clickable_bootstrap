@@ -26,7 +26,8 @@ boostrap-repository.py checkout and install a clickable repository.
 
 
 def _bootstrap(git_command, git_url, repository_path, ref, args,
-               reset_git=False, reset_env=False, reset_conda=False):
+               reset_git=False, reset_env=False, reset_conda=False,
+               reset_pipenv=False):
     """Checkout `git_url` with provided `git_command`. Working copy *parent* path
     is `repository_path` . Folder name is built from `git_url`.
 
@@ -55,28 +56,43 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
             print('[INFO] Cloning {0} in {1}.'.format(git_url, target_path), file=sys.stderr)
             subprocess.check_call(_command(git_command, 'clone', git_url, target_path))
         print('[INFO] Switching/refreshing reference {0}.'.format(ref), file=sys.stderr)
+        subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'checkout', ref), cwd=target_path)
-        subprocess.check_call(_command(git_command, 'pull'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'submodule', 'update', '--init'),
                               cwd=target_path)
-        print('[INFO] Running bootstrap phase', file=sys.stderr)
-        bootstrap_path = os.path.join(target_path, './bootstrap/bootstrap.sh')
-        bootstrap_arguments = []
-        if reset_env:
-            bootstrap_arguments.append('--reset-env')
-        if reset_conda:
-            bootstrap_arguments.append('--reset-conda')
-        bootstrap_arguments.append('--')
-        bootstrap_arguments.extend(args)
-        subprocess.check_call(_command(bootstrap_path, *bootstrap_arguments), cwd=target_path)
+        if os.path.exists(os.path.join(target_path, 'Pipfile')):
+            print('[INFO] Running pipenv phase', file=sys.stderr)
+            try:
+                subprocess.check_call(['pipenv', '--version'])
+            except Exception as pipenv_not_found:
+                raise Exception("[FATAL] pipenv not installed; install pipenv with 'dnf install pipenv' or 'apt-get install pipenv': {0}"
+                                .format(pipenv_not_found))
+            if reset_pipenv:
+                print('[INFO] Cleaning pipenv', file=sys.stderr)
+                if subprocess.call(['pipenv', '--venv'], cwd=target_path) != 0:
+                    subprocess.check_call(['pipenv', '--rm'], cwd=target_path)
+                if os.path.exists(os.path.join(target_path, 'Pipfile.lock')):
+                    os.remove(os.path.join(target_path, 'Pipfile.lock'))
+            subprocess.check_call(['pipenv', 'install'], cwd=target_path)
+            subprocess.check_call(['pipenv', 'run'] + args, cwd=target_path)
+        else:
+            print('[INFO] Running bootstrap phase', file=sys.stderr)
+            bootstrap_path = os.path.join(target_path, './bootstrap/bootstrap.sh')
+            bootstrap_arguments = []
+            if reset_env:
+                bootstrap_arguments.append('--reset-env')
+            if reset_conda:
+                bootstrap_arguments.append('--reset-conda')
+            bootstrap_arguments.append('--')
+            bootstrap_arguments.extend(args)
+            subprocess.check_call(_command(bootstrap_path, *bootstrap_arguments), cwd=target_path)
     except subprocess.CalledProcessError as e:
         # python2.6: index is mandatory
         raise Exception("[FATAL] Error running {0}: {1}"
                         .format(e.cmd, e.output))
     except Exception as e1:
         # python2.6: index is mandatory
-        raise Exception("[FATAL] Error: {0}"
-                        .format(e1))
+        raise Exception("[FATAL] Error: {0}".format(e1))
 
 
 def _command(command, *args):
@@ -116,6 +132,9 @@ def _parser():
     cmd.add_argument('--reset-conda',
                      dest='reset_conda', action='store_true', default=False,
                      help='Remove conda installation.')
+    cmd.add_argument('--reset-pipenv',
+                     dest='reset_pipenv', action='store_true', default=False,
+                     help='Remove pipenv installation.')
     cmd.add_argument('--git-command',
                      dest='git_command', default=default_git_command,
                      help='Path for git command.')
