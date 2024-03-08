@@ -58,7 +58,7 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
         print('[INFO] Switching/refreshing reference {0}.'.format(ref), file=sys.stderr)
         subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'clean', '-df'), cwd=target_path)
-        subprocess.check_call(_command(git_command, 'checkout', ref), cwd=target_path)
+        subprocess.check_call(_command(git_command, 'restore', '--worktree', '--staged', '--source', ref, '.'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'pull'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'submodule', 'update', '--init'),
                               cwd=target_path)
