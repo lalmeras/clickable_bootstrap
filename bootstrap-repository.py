@@ -4,15 +4,9 @@
 
 from __future__ import print_function, unicode_literals
 
-#
-# Global warning: use explicitly-indexed .format() ({0}, {1}) so
-# that script is compatible with python 2.6.
-#
-
 import argparse
 import os
 import os.path
-import pipes
 import re
 import shutil
 import stat

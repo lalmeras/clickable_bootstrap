@@ -4,17 +4,12 @@
 
 from __future__ import print_function, unicode_literals
 
-#
-# Global warning: use explicitly-indexed .format() ({0}, {1}) so
-# that script is compatible with python 2.6.
-#
-
 import argparse
 import io
 import logging
 import os
 import os.path
-import pipes
+import shlex
 import re
 import shutil
 import stat
@@ -123,12 +118,12 @@ def _run(args, **subprocess_args):
     # python2.6: isEnabledFor not available
     debug = logging.root.getEffectiveLevel() == logging.DEBUG
     if debug:
-        command = ' '.join([pipes.quote(i) for i in args])
+        command = ' '.join([shlex.quote(i) for i in args])
         logger.debug(command)
         env = subprocess_args.get('env', None)
         if env:
             # print current environment
-            env_str = ' '.join(['%s=%s' % (k, pipes.quote(v))
+            env_str = ' '.join(['%s=%s' % (k, shlex.quote(v))
                                 for k, v in env.items()])
             logger.debug('env:%s', env_str)
     # call command
@@ -300,7 +295,7 @@ def _handle_bootstrap_command(prefix, name):
             logger.info("[INFO] Replacing -vv[v] by -v https://github.com/python-poetry/poetry/issues/3663")
         logger.info("Running in env %s > %s", name, command)
         activate_conda = ['.', os.path.join(prefix, 'bin/activate')]
-        activate_env = ['conda', 'activate', pipes.quote(name)]
+        activate_env = ['conda', 'activate', shlex.quote(name)]
         whole_command = ' '.join(activate_conda +
                                  ['&&'] + activate_env +
                                  ['&&'] + [command])
@@ -395,8 +390,8 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
     # -> .profile.d/boostrap.conf.d/activate-[NAME].conf
     activate_path = os.path.join(bootstrap_conf_d_path, 'activate-{0}.conf'.format(name))
     activate_script = ACTIVATE_SCRIPT.format(
-        pipes.quote(os.path.join(prefix, 'bin', 'activate')),
-        pipes.quote(name)
+        shlex.quote(os.path.join(prefix, 'bin', 'activate')),
+        shlex.quote(name)
     )
     bootstrap_script = BOOTSTRAP_ACTIVATE_SCRIPT.format(
         bootstrap_conf_d_path
@@ -433,16 +428,16 @@ def _print_activate_command(prefix, name, bootstrap_conf_path, skip_activate_scr
                       'Assuming it is not sourced.')
     activate_command = None
     if bootstrap_activate_enabled:
-        activate_command = 'bootstrap-activate {0}'.format(pipes.quote(name))
+        activate_command = 'bootstrap-activate {0}'.format(shlex.quote(name))
         deactivate_command = 'bootstrap-deactivate'
     elif not skip_activate_script:
         activate_command = ACTIVATE_BOOTSTRAP_COMMAND.format(
-            pipes.quote(real_bootstrap_conf_path), pipes.quote(name))
+            shlex.quote(real_bootstrap_conf_path), shlex.quote(name))
         deactivate_command = 'bootstrap-deactivate'
     else:
         activate_command = ACTIVATE_CONDA_COMMAND.format(
-            pipes.quote(os.path.join(prefix, 'bin', 'activate')),
-            pipes.quote(name)
+            shlex.quote(os.path.join(prefix, 'bin', 'activate')),
+            shlex.quote(name)
         )
         deactivate_command = 'conda deactivate; conda deactivate'
     # print activation command-line
