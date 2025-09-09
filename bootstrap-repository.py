@@ -47,6 +47,13 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
         if not os.path.exists(target_path):
             print('[INFO] Cloning {0} in {1}.'.format(git_url, target_path), file=sys.stderr)
             subprocess.check_call(_command(git_command, 'clone', git_url, target_path))
+        if ref is None:
+            subprocess.check_call(_command(git_command, 'remote', 'set-head', 'origin', '--auto'),
+                                  cwd=target_path)
+            ref = subprocess.check_output(_command(git_command, 'rev-parse', '--abbrev-ref', 'origin/HEAD'),
+                                          encoding="UTF-8",
+                                          cwd=target_path).split("/")[1].strip()
+            print('[INFO] Using default branch {0}.'.format(ref), file=sys.stderr)
         print('[INFO] Switching/refreshing reference {0}.'.format(ref), file=sys.stderr)
         subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'switch', '--force', ref), cwd=target_path)
@@ -120,7 +127,7 @@ def _parser():
     # git clone url
     default_git_url = os.getenv('BOOTSTRAP_GIT_URL', None)
     # git checkout ref
-    default_ref = os.getenv('BOOTSTRAP_REF', 'master')
+    default_ref = os.getenv('BOOTSTRAP_REF', None)
     cmd = argparse.ArgumentParser(description=COMMAND_DESCRIPTION)
     cmd.add_argument('git_url', default=default_git_url,
                      help='Repository git url.')
