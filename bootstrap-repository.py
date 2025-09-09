@@ -47,6 +47,7 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
         if not os.path.exists(target_path):
             print('[INFO] Cloning {0} in {1}.'.format(git_url, target_path), file=sys.stderr)
             subprocess.check_call(_command(git_command, 'clone', git_url, target_path))
+        subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
         if ref is None:
             subprocess.check_call(_command(git_command, 'remote', 'set-head', 'origin', '--auto'),
                                   cwd=target_path)
@@ -55,7 +56,6 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
                                           cwd=target_path).split("/")[1].strip()
             print('[INFO] Using default branch {0}.'.format(ref), file=sys.stderr)
         print('[INFO] Switching/refreshing reference {0}.'.format(ref), file=sys.stderr)
-        subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'switch', '--force', ref), cwd=target_path)
         # -ff: also remove untracked submodules
         subprocess.check_call(_command(git_command, 'clean', '-dff'), cwd=target_path)
