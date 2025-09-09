@@ -7,12 +7,9 @@ from __future__ import print_function, unicode_literals
 import argparse
 import os
 import os.path
-import re
 import shutil
-import stat
 import subprocess
 import sys
-import tempfile
 
 COMMAND_DESCRIPTION = """
 boostrap-repository.py checkout and install a clickable repository.
@@ -21,12 +18,13 @@ boostrap-repository.py checkout and install a clickable repository.
 
 def _bootstrap(git_command, git_url, repository_path, ref, args,
                reset_git=False, reset_env=False, reset_conda=False,
-               reset_pipenv=False):
+               reset_pipenv=False, reset_hatch=False):
     """Checkout `git_url` with provided `git_command`. Working copy *parent* path
     is `repository_path` . Folder name is built from `git_url`.
 
     If reset_git is true, target path is
     """
+    reset_env = reset_pipenv or reset_hatch
     repository_path = os.path.expanduser(repository_path)
     target_path = os.path.join(repository_path,
         os.path.splitext(os.path.basename(git_url))[0])
@@ -51,19 +49,21 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
             subprocess.check_call(_command(git_command, 'clone', git_url, target_path))
         print('[INFO] Switching/refreshing reference {0}.'.format(ref), file=sys.stderr)
         subprocess.check_call(_command(git_command, 'fetch'), cwd=target_path)
-        subprocess.check_call(_command(git_command, 'clean', '-df'), cwd=target_path)
-        subprocess.check_call(_command(git_command, 'restore', '--worktree', '--staged', '--source', ref, '.'), cwd=target_path)
+        subprocess.check_call(_command(git_command, 'switch', '--force', ref), cwd=target_path)
+        # -ff: also remove untracked submodules
+        subprocess.check_call(_command(git_command, 'clean', '-dff'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'pull'), cwd=target_path)
         subprocess.check_call(_command(git_command, 'submodule', 'update', '--init'),
                               cwd=target_path)
         if os.path.exists(os.path.join(target_path, 'Pipfile')):
+            # pipenv mode
             print('[INFO] Running pipenv phase', file=sys.stderr)
             try:
                 subprocess.check_call(['pipenv', '--version'])
             except Exception as pipenv_not_found:
-                raise Exception("[FATAL] pipenv not installed; install pipenv with 'dnf install pipenv' or 'apt-get install pipenv': {0}"
+                raise Exception("[FATAL] pipenv not installed; install pipenv with 'pipx install pipenv': {0}"
                                 .format(pipenv_not_found))
-            if reset_pipenv:
+            if reset_env:
                 print('[INFO] Cleaning pipenv', file=sys.stderr)
                 if subprocess.call(['pipenv', '--venv'], cwd=target_path) == 0:
                     subprocess.check_call(['pipenv', '--rm'], cwd=target_path)
@@ -71,6 +71,18 @@ def _bootstrap(git_command, git_url, repository_path, ref, args,
                     os.remove(os.path.join(target_path, 'Pipfile.lock'))
             subprocess.check_call(['pipenv', 'install'], cwd=target_path)
             subprocess.check_call(['pipenv', 'run'] + args, cwd=target_path)
+        elif os.path.exists(os.path.join(target_path, 'pyproject.toml')):
+            # hatch mode
+            print('[INFO] Running hatch phase', file=sys.stderr)
+            try:
+                subprocess.check_call(['hatch', '--version'])
+            except Exception as hatch_not_found:
+                raise Exception("[FATAL] hatch not installed; install hatch with 'pipx install hatch': {0}"
+                                .format(hatch_not_found))
+            if reset_env:
+                print('[INFO] Cleaning hatch', file=sys.stderr)
+                subprocess.call(['hatch', 'env', 'remove'], cwd=target_path)
+            subprocess.check_call(['hatch', 'run'] + args, cwd=target_path)
         else:
             print('[INFO] Running bootstrap phase', file=sys.stderr)
             bootstrap_path = os.path.join(target_path, './bootstrap/bootstrap.sh')
@@ -131,6 +143,9 @@ def _parser():
     cmd.add_argument('--reset-pipenv',
                      dest='reset_pipenv', action='store_true', default=False,
                      help='Remove pipenv installation.')
+    cmd.add_argument('--reset-hatch',
+                     dest='reset_hatch', action='store_true', default=False,
+                     help='Remove hatch installation.')
     cmd.add_argument('--git-command',
                      dest='git_command', default=default_git_command,
                      help='Path for git command.')
